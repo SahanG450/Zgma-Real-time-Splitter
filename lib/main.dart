@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'pages/getstart.dart';
 import 'pages/intro.dart';
 import 'pages/home.dart';
+import 'pages/profile.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+void main() async{
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(url: 'https://jzvailhekzgqlimwruoa.supabase.co', anonKey: 'sb_publishable_10ul5WGFzN82F8fmWMMfpg_dBZZVRCc');
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarBrightness: Brightness.light,
@@ -37,6 +40,7 @@ class ZgmaApp extends StatelessWidget {
         '/register':  (context) => const RegisterPage(),
         '/intro': (context) => const IntroPage(),
         '/home': (context) => const HomePage(),
+        '/profile': (context) => const ProfilePage(),
       },
     );
   }

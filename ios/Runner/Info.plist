@@ -24,6 +24,10 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSCameraUsageDescription</key>
+    <string>SmartPay needs camera access to set your profile photo</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>SmartPay needs photo library access to set your profile photo</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

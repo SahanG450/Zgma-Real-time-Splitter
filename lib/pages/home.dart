@@ -146,7 +146,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
+//spliTer123@C
   // ── Header widget ──────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
@@ -612,8 +612,12 @@ class _HomePageState extends State<HomePage> {
               return Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() => _selectedTab = i);
+                    if (i == 4) { // Profile tab index
+                      Navigator.pushNamed(context, '/profile');
+                    } else {
+                      HapticFeedback.lightImpact();
+                      setState(() => _selectedTab = i);
+                    }
                   },
                   behavior: HitTestBehavior.opaque,
                   child: Column(
