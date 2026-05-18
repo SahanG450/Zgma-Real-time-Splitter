@@ -1,28 +1,28 @@
+// FIX 6: dart:io last in import order per Dart conventions
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // profile.dart — SmartPay Profile Page
-// Add to main.dart routes:
-//   '/profile': (context) => const ProfilePage(),
-// Navigate from home.dart bottom nav Profile tap:
-//   Navigator.pushNamed(context, '/profile');
+// Routes (main.dart):   '/profile': (context) => const ProfilePage(),
+// Navigate from home:   Navigator.pushNamed(context, '/profile');
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── App-wide theme colors ────────────────────────────────────────────────────
-const _kAccent      = Color(0xFF5E5CE6);
-const _kAccentLight = Color(0xFF7B79FF);
-const _kNavy        = Color(0xFF1A1A6E);
-const _kBg          = Color(0xFFF0F2F8);
-const _kCard        = Colors.white;
-const _kText        = Color(0xFF1A1A2E);
-const _kMuted       = Color(0xFF8E8EA0);
-const _kDanger      = Color(0xFFFF4757);
-const _kPositive    = Color(0xFF5E5CE6);
-const _kNegative    = Color(0xFFFF6B6B);
-const _kSilver      = Color(0xFFE8EAF2);
+// ── Theme constants ───────────────────────────────────────────────────────────
+const _kAccent   = Color(0xFF5E5CE6);
+// FIX 5: removed unused _kAccentLight
+const _kNavy     = Color(0xFF1A1A6E);
+const _kBg       = Color(0xFFF0F2F8);
+const _kCard     = Colors.white;
+const _kText     = Color(0xFF1A1A2E);
+const _kMuted    = Color(0xFF8E8EA0);
+const _kDanger   = Color(0xFFFF4757);
+const _kPositive = Color(0xFF5E5CE6);
+const _kNegative = Color(0xFFFF6B6B);
+const _kSilver   = Color(0xFFE8EAF2);
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -32,7 +32,11 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // ── Section expand state — true = open, false = collapsed ─────────────────
+
+  // ── Supabase client ───────────────────────────────────────────────────────
+  final _supabase = Supabase.instance.client;
+
+  // ── Section collapse state ────────────────────────────────────────────────
   final Map<String, bool> _expanded = {
     'My Cards'                  : true,
     'My Transactions'           : false,
@@ -42,23 +46,94 @@ class _ProfilePageState extends State<ProfilePage> {
     'Account'                   : false,
   };
 
+  void _toggle(String key) {
+    HapticFeedback.lightImpact();
+    setState(() => _expanded[key] = !(_expanded[key] ?? false));
+  }
 
-  final _supabase = Supabase.instance.client;
-  String? _avatarUrl;   // stores the full public URL after upload
-  bool _uploadingPhoto = false;
+  // ── Photo state ───────────────────────────────────────────────────────────
+  String? _avatarUrl;
+  bool    _uploadingPhoto = false;
 
-// ── Pick image from gallery or camera ─────────────────────────────────────
+  // ── User data ─────────────────────────────────────────────────────────────
+  String _displayName  = 'Dilan Perera';
+  String _email        = 'dilan@example.com';
+  String _phone        = '+94 77 123 4567';
+  String _avatarLetter = 'D';
+
+  // ── Toggle states ─────────────────────────────────────────────────────────
+  bool   _notifyNewBill    = true;
+  bool   _notifySettlement = true;
+  bool   _notifyReminders  = false;
+  // FIX 4: removed unused _darkMode variable
+  bool   _allowGroupAdd    = true;
+  bool   _biometricLock    = false;
+  String _selectedTheme    = 'Navy Blue';
+
+  // ── Dummy list data ───────────────────────────────────────────────────────
+  final List<Map<String, dynamic>> _cards = [
+    {'type': 'Visa',       'last4': '4242', 'color': _kAccent},
+    {'type': 'Mastercard', 'last4': '8821', 'color': _kNavy},
+  ];
+
+  final List<Map<String, dynamic>> _paymentHistory = [
+    {'title': 'Ministry of Crab',  'date': 'May 12, 2025', 'amount': '- LKR 1,600', 'pos': false},
+    {'title': 'Kumar paid you',    'date': 'May 10, 2025', 'amount': '+ LKR 4,800', 'pos': true},
+    {'title': 'PickMe to Galle',   'date': 'May 8, 2025',  'amount': '- LKR 2,300', 'pos': false},
+    {'title': 'Sahan paid you',    'date': 'May 5, 2025',  'amount': '+ LKR 1,550', 'pos': true},
+    {'title': 'Beach Villa split', 'date': 'Apr 28, 2025', 'amount': '- LKR 3,200', 'pos': false},
+  ];
+
+  final List<Map<String, dynamic>> _debtsOwed = [
+    {'name': 'Nimal', 'desc': 'Ministry of Crab', 'amount': 'LKR 1,600'},
+    {'name': 'Kasun', 'desc': 'Beach Villa',       'amount': 'LKR 3,200'},
+  ];
+
+  final List<Map<String, dynamic>> _debtsToMe = [
+    {'name': 'Sahan',  'desc': 'PickMe to Galle', 'amount': 'LKR 2,300'},
+    {'name': 'Amali',  'desc': 'Group dinner',     'amount': 'LKR 950'},
+    {'name': 'Dinesh', 'desc': 'Ella trip',        'amount': 'LKR 4,100'},
+  ];
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _loadAvatar();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SUPABASE PHOTO METHODS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Future<void> _loadAvatar() async {
+    try {
+      // FIX 1: always use real auth userId — never hardcode
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final data = await _supabase
+          .from('users')
+          .select('avatar_url')
+          .eq('id', userId)
+          .single();
+
+      if (data['avatar_url'] != null && mounted) {
+        setState(() => _avatarUrl = data['avatar_url']);
+      }
+    } catch (_) {
+      // silently ignore — user may not have an avatar yet
+    }
+  }
+
   Future<void> _pickAndUploadPhoto() async {
-    final picker = ImagePicker();
-
-    // Show source choice
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: _kCard,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
@@ -67,17 +142,11 @@ class _ProfilePageState extends State<ProfilePage> {
             Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFE8EAF2),
-                borderRadius: BorderRadius.circular(2),
-              ),
+                  color: _kSilver, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 16),
-            const Text('Choose Photo',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A2E),
-                )),
+            const Text('Profile Photo', style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: _kText)),
             const SizedBox(height: 20),
             _sourceOption(
               icon: Icons.photo_library_outlined,
@@ -90,154 +159,110 @@ class _ProfilePageState extends State<ProfilePage> {
               label: 'Take a Photo',
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
-            const SizedBox(height: 10),
-            if (_avatarUrl != null)
+            if (_avatarUrl != null) ...[
+              const SizedBox(height: 10),
               _sourceOption(
                 icon: Icons.delete_outline,
                 label: 'Remove Photo',
-                color: const Color(0xFFFF4757),
+                color: _kDanger,
                 onTap: () => Navigator.pop(context, null),
               ),
+            ],
           ],
         ),
       ),
     );
 
-    // Remove photo if selected
+    // null + existing photo = user chose Remove
     if (source == null && _avatarUrl != null) {
       await _removePhoto();
       return;
     }
     if (source == null) return;
 
-    // Pick the image
-    final XFile? picked = await picker.pickImage(
+    final picked = await ImagePicker().pickImage(
       source: source,
-      imageQuality: 80,   // compress to 80% — saves storage space
-      maxWidth: 512,      // max 512px wide — enough for an avatar
+      imageQuality: 80,
+      maxWidth: 512,
       maxHeight: 512,
     );
     if (picked == null) return;
-
     await _uploadPhoto(File(picked.path));
   }
 
-// ── Upload to Supabase Storage ─────────────────────────────────────────────
   Future<void> _uploadPhoto(File file) async {
     setState(() => _uploadingPhoto = true);
-
     try {
-      // final userId = _supabase.auth.currentUser?.id;
-      final userId = 1;
+      // FIX 1: use real auth userId — not hardcoded int
+      final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception('Not logged in');
 
-      // File path inside the bucket: avatars/USER_ID.jpg
-      // Using userId as filename ensures each user has one avatar
-      // and uploading a new one automatically overwrites the old one
       final filePath = '$userId.jpg';
 
-      // Upload — upsert: true overwrites if file already exists
-      await _supabase.storage
-          .from('avatars')
-          .upload(
+      await _supabase.storage.from('avatars').upload(
         filePath,
         file,
         fileOptions: const FileOptions(
-          upsert: true,
-          contentType: 'image/jpeg',
-        ),
+            upsert: true, contentType: 'image/jpeg'),
       );
 
-      // Get the public URL
-      final publicUrl = _supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
+      final publicUrl =
+      _supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      // Add a cache-busting timestamp so Flutter reloads the new image
-      final urlWithCache = '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+      // Cache-bust so Image.network reloads the new photo
+      final urlWithBust =
+          '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
 
-      // Save URL to your users table in the database
       await _supabase
           .from('users')
           .update({'avatar_url': publicUrl})
           .eq('id', userId);
 
-      setState(() {
-        _avatarUrl = urlWithCache;
-        _uploadingPhoto = false;
-      });
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile photo updated'),
-            backgroundColor: Color(0xFF5E5CE6),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() {
+          _avatarUrl      = urlWithBust;
+          _uploadingPhoto = false;
+        });
+        _showSnack('Profile photo updated ✓', success: true);
       }
     } catch (e) {
-      setState(() => _uploadingPhoto = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload failed: $e'),
-            backgroundColor: const Color(0xFFFF4757),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _uploadingPhoto = false);
+        _showSnack('Upload failed: $e', success: false);
       }
     }
   }
 
-// ── Remove photo from storage ──────────────────────────────────────────────
   Future<void> _removePhoto() async {
     setState(() => _uploadingPhoto = true);
     try {
+      // FIX 1: use real auth userId
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      await _supabase.storage
-          .from('avatars')
-          .remove(['$userId.jpg']);
-
+      await _supabase.storage.from('avatars').remove(['$userId.jpg']);
       await _supabase
           .from('users')
           .update({'avatar_url': null})
           .eq('id', userId);
 
-      setState(() {
-        _avatarUrl = null;
-        _uploadingPhoto = false;
-      });
+      if (mounted) {
+        setState(() {
+          _avatarUrl      = null;
+          _uploadingPhoto = false;
+        });
+        _showSnack('Photo removed', success: true);
+      }
     } catch (e) {
-      setState(() => _uploadingPhoto = false);
+      if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
 
-// ── Load existing photo on page open ──────────────────────────────────────
-// Call this in initState
-  Future<void> _loadAvatar() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
-    final data = await _supabase
-        .from('users')
-        .select('avatar_url')
-        .eq('id', userId)
-        .single();
-
-    if (data['avatar_url'] != null) {
-      setState(() => _avatarUrl = data['avatar_url']);
-    }
-  }
-
-// ── Helper widget for source picker ──────────────────────────────────────
   Widget _sourceOption({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    Color color = const Color(0xFF1A1A2E),
+    Color color = _kText,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -245,74 +270,29 @@ class _ProfilePageState extends State<ProfilePage> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8EAF2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 12),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                )),
-          ],
-        ),
+            color: _kSilver, borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+        ]),
       ),
     );
   }
-  //////////////////////
-  @override
-  void initState() {
-    super.initState();
-    _loadAvatar();
+
+  void _showSnack(String msg, {required bool success}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: success ? _kAccent : _kDanger,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
-  void _toggle(String key) {
-    HapticFeedback.lightImpact();
-    setState(() => _expanded[key] = !(_expanded[key] ?? false));
-  }
-
-  // ── Dummy user data — replace with real backend data ──────────────────────
-  String _displayName  = 'Dilan Perera';
-  String _email        = 'dilan@example.com';
-  String _phone        = '+94 77 123 4567';
-  String _avatarLetter = 'D';
-
-  bool _notifyNewBill        = true;
-  bool _notifySettlement     = true;
-  bool _notifyReminders      = false;
-  bool _darkMode             = false;
-  bool _allowGroupAdd        = true;
-  bool _biometricLock        = false;
-  String _selectedTheme      = 'Navy Blue';
-
-  final List<Map<String, dynamic>> _cards = [
-    {'type': 'Visa',       'last4': '4242', 'color': _kAccent},
-    {'type': 'Mastercard', 'last4': '8821', 'color': _kNavy},
-  ];
-
-  final List<Map<String, dynamic>> _paymentHistory = [
-    {'title': 'Ministry of Crab',   'date': 'May 12, 2025', 'amount': '- LKR 1,600', 'pos': false},
-    {'title': 'Kumar paid you',     'date': 'May 10, 2025', 'amount': '+ LKR 4,800', 'pos': true},
-    {'title': 'PickMe to Galle',    'date': 'May 8, 2025',  'amount': '- LKR 2,300', 'pos': false},
-    {'title': 'Sahan paid you',     'date': 'May 5, 2025',  'amount': '+ LKR 1,550', 'pos': true},
-    {'title': 'Beach Villa split',  'date': 'Apr 28, 2025', 'amount': '- LKR 3,200', 'pos': false},
-  ];
-
-  final List<Map<String, dynamic>> _debtsOwed = [
-    {'name': 'Nimal',  'desc': 'Ministry of Crab',  'amount': 'LKR 1,600'},
-    {'name': 'Kasun',  'desc': 'Beach Villa',        'amount': 'LKR 3,200'},
-  ];
-
-  final List<Map<String, dynamic>> _debtsToMe = [
-    {'name': 'Sahan',  'desc': 'PickMe to Galle',   'amount': 'LKR 2,300'},
-    {'name': 'Amali',  'desc': 'Group dinner',       'amount': 'LKR 950'},
-    {'name': 'Dinesh', 'desc': 'Ella trip',          'amount': 'LKR 4,100'},
-  ];
-  // ──────────────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -320,10 +300,7 @@ class _ProfilePageState extends State<ProfilePage> {
       backgroundColor: _kBg,
       body: CustomScrollView(
         slivers: [
-          // ── Hero header ───────────────────────────────────────────────────
           SliverToBoxAdapter(child: _buildHeader(context)),
-
-          // ── Collapsible sections ──────────────────────────────────────────
           _collapsibleSection(
             key: 'My Cards',
             icon: Icons.credit_card_outlined,
@@ -355,14 +332,16 @@ class _ProfilePageState extends State<ProfilePage> {
             child: _buildAccountActions(context),
             isDanger: true,
           ),
-
           const SliverToBoxAdapter(child: SizedBox(height: 40)),
         ],
       ),
     );
   }
 
-  // ── Collapsible section wrapper ─────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // COLLAPSIBLE SECTION WRAPPER
+  // ══════════════════════════════════════════════════════════════════════════
+
   SliverToBoxAdapter _collapsibleSection({
     required String key,
     required IconData icon,
@@ -379,86 +358,76 @@ class _ProfilePageState extends State<ProfilePage> {
           decoration: BoxDecoration(
             color: _kCard,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: [BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8, offset: const Offset(0, 2),
+            )],
           ),
-          child: Column(
-            children: [
-              // ── Tap header ──────────────────────────────────────────────
-              GestureDetector(
-                onTap: () => _toggle(key),
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(icon, color: color, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          key,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: isDanger ? _kDanger : _kText,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ),
-                      AnimatedRotation(
-                        turns: isOpen ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOut,
-                        child: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          color: isOpen ? color : _kMuted,
-                          size: 22,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Animated content ─────────────────────────────────────────
-              AnimatedCrossFade(
-                firstChild: const SizedBox(width: double.infinity, height: 0),
-                secondChild: Column(
-                  children: [
-                    Divider(height: 1, color: _kSilver),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                      child: child,
+          child: Column(children: [
+            // Tappable header
+            GestureDetector(
+              onTap: () => _toggle(key),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+                child: Row(children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                  ],
-                ),
-                crossFadeState: isOpen
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                duration: const Duration(milliseconds: 280),
-                sizeCurve: Curves.easeInOut,
+                    child: Icon(icon, color: color, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(key, style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: isDanger ? _kDanger : _kText,
+                      letterSpacing: -0.2,
+                    )),
+                  ),
+                  AnimatedRotation(
+                    turns: isOpen ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: isOpen ? color : _kMuted,
+                      size: 22,
+                    ),
+                  ),
+                ]),
               ),
-            ],
-          ),
+            ),
+            // Animated body
+            AnimatedCrossFade(
+              firstChild:  const SizedBox(width: double.infinity, height: 0),
+              secondChild: Column(children: [
+                const Divider(height: 1, color: _kSilver),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                  child: child,
+                ),
+              ]),
+              crossFadeState: isOpen
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 280),
+              sizeCurve: Curves.easeInOut,
+            ),
+          ]),
         ),
       ),
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // HEADER
+  // ══════════════════════════════════════════════════════════════════════════
+
   Widget _buildHeader(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -468,7 +437,7 @@ class _ProfilePageState extends State<ProfilePage> {
           colors: [Color(0xFF0B0B55), Color(0xFF3B3783)],
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
+          bottomLeft:  Radius.circular(28),
           bottomRight: Radius.circular(28),
         ),
       ),
@@ -476,655 +445,503 @@ class _ProfilePageState extends State<ProfilePage> {
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          child: Column(
-            children: [
-              // Top bar
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back_ios_new,
-                        color: Colors.white, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('Profile',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      )),
-                  const Spacer(),
-                  // Edit button
-                  GestureDetector(
-                    onTap: () => _showEditProfileSheet(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.25)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.edit_outlined,
-                              color: Colors.white, size: 13),
-                          SizedBox(width: 5),
-                          Text('Edit',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+          child: Column(children: [
+            // Top bar
+            Row(children: [
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_ios_new,
+                    color: Colors.white, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
+              const SizedBox(width: 8),
+              const Text('Profile', style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _showEditProfileSheet(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: Colors.white.withOpacity(0.25)),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.edit_outlined,
+                        color: Colors.white, size: 13),
+                    SizedBox(width: 5),
+                    Text('Edit', style: TextStyle(
+                        color: Colors.white, fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ]),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-              // Avatar + name
-              Column(
-                children: [
-                  Stack(
-                    children: [
-                      Container(
-                        width: 80, height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF7B79FF), _kAccent],
-                          ),
-                          border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                              width: 3),
-                        ),
-                        child: Center(
-                          child: Text(
-                            _avatarLetter,
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0, right: 0,
-                        child: Container(
-                          width: 26, height: 26,
-                          decoration: const BoxDecoration(
+            // FIX 2 & 7: avatar now shows network image when available,
+            // shows spinner while uploading, falls back to letter initial,
+            // and camera button correctly calls _pickAndUploadPhoto()
+            Stack(children: [
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: Colors.white.withOpacity(0.3), width: 3),
+                ),
+                child: ClipOval(
+                  child: _uploadingPhoto
+                  // Uploading spinner
+                      ? Container(
+                      color: Colors.white.withOpacity(0.2),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      ))
+                      : _avatarUrl != null
+                  // Real photo from Supabase
+                      ? Image.network(
+                    _avatarUrl!,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, prog) =>
+                    prog == null
+                        ? child
+                        : Container(
+                        color:
+                        _kAccent.withOpacity(0.3),
+                        child: const Center(
+                          child:
+                          CircularProgressIndicator(
                             color: Colors.white,
-                            shape: BoxShape.circle,
+                            strokeWidth: 2,
                           ),
-                          child: const Icon(Icons.camera_alt_outlined,
-                              size: 14, color: _kAccent),
-                        ),
-                      ),
-                    ],
+                        )),
+                    errorBuilder: (_, __, ___) =>
+                        _letterAvatar(),
+                  )
+                  // Fallback letter avatar
+                      : _letterAvatar(),
+                ),
+              ),
+              // FIX 2: camera button now correctly triggers photo picker
+              Positioned(
+                bottom: 0, right: 0,
+                child: GestureDetector(
+                  onTap: _pickAndUploadPhoto,
+                  child: Container(
+                    width: 26, height: 26,
+                    decoration: const BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle),
+                    child: const Icon(Icons.camera_alt_outlined,
+                        size: 14, color: _kAccent),
                   ),
-                  const SizedBox(height: 12),
-                  Text(_displayName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -0.4,
-                      )),
-                  const SizedBox(height: 4),
-                  Text(_email,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white.withOpacity(0.65),
-                      )),
-                  const SizedBox(height: 4),
-                  Text(_phone,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white.withOpacity(0.65),
-                      )),
-                ],
+                ),
               ),
+            ]),
 
-              const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            Text(_displayName, style: const TextStyle(
+                fontSize: 20, fontWeight: FontWeight.w700,
+                color: Colors.white, letterSpacing: -0.4)),
+            const SizedBox(height: 4),
+            Text(_email, style: TextStyle(
+                fontSize: 13, color: Colors.white.withOpacity(0.65))),
+            const SizedBox(height: 2),
+            Text(_phone, style: TextStyle(
+                fontSize: 13, color: Colors.white.withOpacity(0.65))),
 
-              // Quick stats row
-              Row(
-                children: [
-                  _quickStat('Groups', '4'),
-                  _vDivider(),
-                  _quickStat('Bills', '18'),
-                  _vDivider(),
-                  _quickStat('Settled', '12'),
-                  _vDivider(),
-                  _quickStat('Pending', '6'),
-                ],
-              ),
+            const SizedBox(height: 20),
+
+            // Quick stats
+            Row(children: [
+              _quickStat('Groups',  '4'),
+              _statDivider(),
+              _quickStat('Bills',   '18'),
+              _statDivider(),
+              _quickStat('Settled', '12'),
+              _statDivider(),
+              _quickStat('Pending', '6'),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _letterAvatar() => Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+          colors: [Color(0xFF7B79FF), _kAccent]),
+    ),
+    child: Center(
+      child: Text(_avatarLetter, style: const TextStyle(
+          fontSize: 32, fontWeight: FontWeight.w700,
+          color: Colors.white)),
+    ),
+  );
+
+  Widget _quickStat(String label, String value) => Expanded(
+    child: Column(children: [
+      Text(value, style: const TextStyle(
+          fontSize: 20, fontWeight: FontWeight.w800,
+          color: Colors.white)),
+      const SizedBox(height: 2),
+      Text(label, style: TextStyle(
+          fontSize: 11, color: Colors.white.withOpacity(0.6))),
+    ]),
+  );
+
+  Widget _statDivider() => Container(
+      width: 1, height: 32,
+      color: Colors.white.withOpacity(0.2));
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SECTION CONTENT BUILDERS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── My Cards ──────────────────────────────────────────────────────────────
+  Widget _buildCardsSection() {
+    return Column(children: [
+      ..._cards.map((card) => _cardTile(card)),
+      const SizedBox(height: 10),
+      GestureDetector(
+        onTap: () => _showAddCardSheet(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: _kSilver,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _kAccent.withOpacity(0.3)),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_outline, color: _kAccent, size: 18),
+              SizedBox(width: 8),
+              Text('Add New Card', style: TextStyle(
+                  color: _kAccent, fontWeight: FontWeight.w600,
+                  fontSize: 14)),
             ],
           ),
         ),
       ),
-    );
+    ]);
   }
 
-  Widget _quickStat(String label, String value) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              )),
-          const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.white.withOpacity(0.6),
-              )),
-        ],
+  Widget _cardTile(Map<String, dynamic> card) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(colors: [
+        card['color'] as Color,
+        (card['color'] as Color).withOpacity(0.75),
+      ], begin: Alignment.topLeft, end: Alignment.bottomRight),
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [BoxShadow(
+        color: (card['color'] as Color).withOpacity(0.3),
+        blurRadius: 12, offset: const Offset(0, 4),
+      )],
+    ),
+    child: Row(children: [
+      Container(
+        width: 40, height: 26,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.25),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: const Icon(Icons.credit_card,
+            color: Colors.white, size: 16),
       ),
-    );
-  }
-
-  Widget _vDivider() => Container(
-    width: 1, height: 32,
-    color: Colors.white.withOpacity(0.2),
+      const SizedBox(width: 14),
+      Expanded(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(card['type'], style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w700,
+              fontSize: 14)),
+          Text('•••• •••• •••• ${card['last4']}',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.8), fontSize: 12)),
+        ],
+      )),
+      IconButton(
+        icon: Icon(Icons.delete_outline,
+            color: Colors.white.withOpacity(0.7), size: 18),
+        onPressed: () => setState(() => _cards.remove(card)),
+      ),
+    ]),
   );
 
-  // ── Section title sliver ────────────────────────────────────────────────────
-
-  // ── Cards section ───────────────────────────────────────────────────────────
-  Widget _buildCardsSection() {
-    return Column(
-      children: [
-        // Existing cards
-        ..._cards.map((card) => _cardTile(card)),
-        const SizedBox(height: 10),
-        // Add card button
-        GestureDetector(
-          onTap: () => _showAddCardSheet(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: _kCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _kAccent.withOpacity(0.3),
-                  style: BorderStyle.solid),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_circle_outline, color: _kAccent, size: 18),
-                SizedBox(width: 8),
-                Text('Add New Card',
-                    style: TextStyle(
-                      color: _kAccent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    )),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _cardTile(Map<String, dynamic> card) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [(card['color'] as Color),
-            (card['color'] as Color).withOpacity(0.75)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: (card['color'] as Color).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40, height: 26,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.25),
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: const Icon(Icons.credit_card,
-                color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(card['type'],
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14)),
-                Text('•••• •••• •••• ${card['last4']}',
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 12)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline,
-                color: Colors.white.withOpacity(0.7), size: 18),
-            onPressed: () => setState(
-                    () => _cards.remove(card)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── My Transactions ─────────────────────────────────────────────────────────
+  // ── My Transactions ───────────────────────────────────────────────────────
   Widget _buildTransactionsSection() {
-    final totalOwed = _debtsOwed.fold(0, (sum, d) {
-      final n = int.tryParse(
-          d['amount'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ??
-          0;
-      return sum + n;
-    });
-    final totalToMe = _debtsToMe.fold(0, (sum, d) {
-      final n = int.tryParse(
-          d['amount'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ??
-          0;
-      return sum + n;
-    });
+    final totalOwed = _debtsOwed.fold(0, (sum, d) =>
+    sum + (int.tryParse(d['amount'].toString()
+        .replaceAll(RegExp(r'[^0-9]'), '')) ?? 0));
+    final totalToMe = _debtsToMe.fold(0, (sum, d) =>
+    sum + (int.tryParse(d['amount'].toString()
+        .replaceAll(RegExp(r'[^0-9]'), '')) ?? 0));
 
-    return Column(
-      children: [
-        // Summary row
-        Row(
-          children: [
-            Expanded(
-              child: _txSummaryCard(
-                label: 'I Owe',
-                amount: 'LKR $totalOwed',
-                icon: Icons.north_east,
-                color: _kNegative,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _txSummaryCard(
-                label: 'Owed to Me',
-                amount: 'LKR $totalToMe',
-                icon: Icons.south_west,
-                color: _kPositive,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // I owe list
-        _txGroupHeader('I need to pay', _kNegative),
-        ..._debtsOwed.map((d) => _txRow(d, negative: true)),
-        const SizedBox(height: 14),
-
-        // Owed to me list
-        _txGroupHeader('People owe me', _kPositive),
-        ..._debtsToMe.map((d) => _txRow(d, negative: false)),
-      ],
-    );
+    return Column(children: [
+      Row(children: [
+        Expanded(child: _txSummaryCard(
+            label: 'I Owe', amount: 'LKR $totalOwed',
+            icon: Icons.north_east, color: _kNegative)),
+        const SizedBox(width: 12),
+        Expanded(child: _txSummaryCard(
+            label: 'Owed to Me', amount: 'LKR $totalToMe',
+            icon: Icons.south_west, color: _kPositive)),
+      ]),
+      const SizedBox(height: 14),
+      _txGroupHeader('I need to pay', _kNegative),
+      ..._debtsOwed.map((d) => _txRow(d, negative: true)),
+      const SizedBox(height: 14),
+      _txGroupHeader('People owe me', _kPositive),
+      ..._debtsToMe.map((d) => _txRow(d, negative: false)),
+    ]);
   }
 
   Widget _txSummaryCard({
-    required String label,
-    required String amount,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04),
-              blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 13, color: color),
-              const SizedBox(width: 4),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, color: _kMuted)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(amount,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: color,
-              )),
-        ],
-      ),
-    );
-  }
+    required String label, required String amount,
+    required IconData icon, required Color color,
+  }) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      // FIX 3: no extra _cardList wrapper here — no double shadow
+      color: color.withOpacity(0.07),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: color.withOpacity(0.2)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(
+            fontSize: 12, color: _kMuted)),
+      ]),
+      const SizedBox(height: 6),
+      Text(amount, style: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w700, color: color)),
+    ]),
+  );
 
-  Widget _txGroupHeader(String title, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Container(
-              width: 4, height: 14,
-              decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(width: 8),
-          Text(title,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _kText,
-              )),
-        ],
+  Widget _txGroupHeader(String title, Color color) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(children: [
+      Container(
+        width: 4, height: 14,
+        decoration: BoxDecoration(
+            color: color, borderRadius: BorderRadius.circular(2)),
       ),
-    );
-  }
+      const SizedBox(width: 8),
+      Text(title, style: const TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w600, color: _kText)),
+    ]),
+  );
 
-  Widget _txRow(Map<String, dynamic> d, {required bool negative}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
+  Widget _txRow(Map<String, dynamic> d, {required bool negative}) =>
+      Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        // FIX 3: use _kSilver background instead of _kCard to avoid
+        // shadow-on-shadow when inside the collapsible section card
+        decoration: BoxDecoration(
+            color: _kSilver, borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
           CircleAvatar(
             radius: 18,
             backgroundColor: negative
                 ? _kNegative.withOpacity(0.12)
                 : _kPositive.withOpacity(0.12),
-            child: Text(
-              d['name'].toString()[0],
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: negative ? _kNegative : _kPositive,
-              ),
-            ),
+            child: Text(d['name'].toString()[0], style: TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 14,
+              color: negative ? _kNegative : _kPositive,
+            )),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(d['name'],
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: _kText)),
-                Text(d['desc'],
-                    style: const TextStyle(
-                        fontSize: 12, color: _kMuted)),
-              ],
-            ),
-          ),
-          Text(d['amount'],
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: negative ? _kNegative : _kPositive,
-              )),
-        ],
-      ),
-    );
-  }
-
-  // ── Payment history ─────────────────────────────────────────────────────────
-  Widget _buildPaymentHistory() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04),
-              blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        children: _paymentHistory.asMap().entries.map((e) {
-          final i = e.key;
-          final h = e.value;
-          final isLast = i == _paymentHistory.length - 1;
-          return Column(
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 13),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: (h['pos'] as bool)
-                            ? _kPositive.withOpacity(0.1)
-                            : _kNegative.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Icon(
-                        (h['pos'] as bool)
-                            ? Icons.arrow_downward
-                            : Icons.arrow_upward,
-                        size: 18,
-                        color: (h['pos'] as bool)
-                            ? _kPositive
-                            : _kNegative,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(h['title'],
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: _kText,
-                              )),
-                          Text(h['date'],
-                              style: const TextStyle(
-                                  fontSize: 11, color: _kMuted)),
-                        ],
-                      ),
-                    ),
-                    Text(h['amount'],
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: (h['pos'] as bool)
-                              ? _kPositive
-                              : _kNegative,
-                        )),
-                  ],
+              Text(d['name'], style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: _kText)),
+              Text(d['desc'], style: const TextStyle(
+                  fontSize: 12, color: _kMuted)),
+            ],
+          )),
+          Text(d['amount'], style: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w700,
+            color: negative ? _kNegative : _kPositive,
+          )),
+        ]),
+      );
+
+  // ── Payment History ───────────────────────────────────────────────────────
+  Widget _buildPaymentHistory() {
+    return Column(
+      children: _paymentHistory.asMap().entries.map((e) {
+        final isLast = e.key == _paymentHistory.length - 1;
+        final h = e.value;
+        return Column(children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  // FIX 3: no _cardList wrapper here — flat background
+                  color: (h['pos'] as bool)
+                      ? _kPositive.withOpacity(0.1)
+                      : _kNegative.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  (h['pos'] as bool)
+                      ? Icons.arrow_downward
+                      : Icons.arrow_upward,
+                  size: 18,
+                  color: (h['pos'] as bool) ? _kPositive : _kNegative,
                 ),
               ),
-              if (!isLast)
-                const Divider(
-                    height: 1, indent: 68, color: _kSilver),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ── Notifications ───────────────────────────────────────────────────────────
-  Widget _buildNotifications() {
-    return _cardList([
-      _toggleRow(
-        icon: Icons.receipt_long_outlined,
-        label: 'New Bill Alerts',
-        subtitle: 'Notify when someone adds a bill',
-        value: _notifyNewBill,
-        onChanged: (v) => setState(() => _notifyNewBill = v),
-      ),
-      _toggleRow(
-        icon: Icons.check_circle_outline,
-        label: 'Settlement Alerts',
-        subtitle: 'Notify when a payment is confirmed',
-        value: _notifySettlement,
-        onChanged: (v) => setState(() => _notifySettlement = v),
-      ),
-      _toggleRow(
-        icon: Icons.alarm_outlined,
-        label: 'Payment Reminders',
-        subtitle: 'Weekly nudge for pending debts',
-        value: _notifyReminders,
-        onChanged: (v) => setState(() => _notifyReminders = v),
-        isLast: true,
-      ),
-    ]);
-  }
-
-  // ── Settings ────────────────────────────────────────────────────────────────
-  Widget _buildSettings(BuildContext context) {
-    return _cardList([
-      _toggleRow(
-        icon: Icons.fingerprint,
-        label: 'Biometric Lock',
-        subtitle: 'Use fingerprint to open app',
-        value: _biometricLock,
-        onChanged: (v) => setState(() => _biometricLock = v),
-      ),
-      _toggleRow(
-        icon: Icons.group_add_outlined,
-        label: 'Allow Group Invites',
-        subtitle: 'Let others add you to groups',
-        value: _allowGroupAdd,
-        onChanged: (v) => setState(() => _allowGroupAdd = v),
-      ),
-      _arrowRow(
-        icon: Icons.palette_outlined,
-        label: 'App Theme',
-        subtitle: _selectedTheme,
-        onTap: () => _showThemeSheet(context),
-      ),
-      _arrowRow(
-        icon: Icons.person_outline,
-        label: 'Display Name',
-        subtitle: _displayName,
-        onTap: () => _showEditProfileSheet(context),
-      ),
-      _arrowRow(
-        icon: Icons.currency_exchange_outlined,
-        label: 'Default Currency',
-        subtitle: 'LKR — Sri Lankan Rupee',
-        onTap: () {},
-        isLast: true,
-      ),
-    ]);
-  }
-
-  // ── Account actions ─────────────────────────────────────────────────────────
-  Widget _buildAccountActions(BuildContext context) {
-    return Column(
-      children: [
-        // Logout
-        GestureDetector(
-          onTap: () => _showLogoutDialog(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            decoration: BoxDecoration(
-              color: _kCard,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.04),
-                    blurRadius: 8, offset: const Offset(0, 2)),
-              ],
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.logout, color: _kAccent, size: 18),
-                SizedBox(width: 8),
-                Text('Log Out',
-                    style: TextStyle(
-                      color: _kAccent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    )),
-              ],
-            ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(h['title'], style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600,
+                      color: _kText)),
+                  Text(h['date'], style: const TextStyle(
+                      fontSize: 11, color: _kMuted)),
+                ],
+              )),
+              Text(h['amount'], style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700,
+                color: (h['pos'] as bool) ? _kPositive : _kNegative,
+              )),
+            ]),
           ),
-        ),
-        const SizedBox(height: 12),
-        // Delete account
-        GestureDetector(
-          onTap: () => _showDeleteAccountSheet(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            decoration: BoxDecoration(
-              color: _kDanger.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _kDanger.withOpacity(0.25)),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.delete_forever_outlined,
-                    color: _kDanger, size: 18),
-                SizedBox(width: 8),
-                Text('Delete My Account',
-                    style: TextStyle(
-                      color: _kDanger,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    )),
-              ],
-            ),
-          ),
-        ),
-      ],
+          if (!isLast) const Divider(height: 1, color: _kSilver),
+        ]);
+      }).toList(),
     );
   }
 
-  // ── Reusable card list container ────────────────────────────────────────────
-  Widget _cardList(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04),
-              blurRadius: 8, offset: const Offset(0, 2)),
-        ],
+  // ── Notifications ─────────────────────────────────────────────────────────
+  // FIX 3: removed _cardList wrapper — section card already provides the bg
+  Widget _buildNotifications() => Column(children: [
+    _toggleRow(
+      icon: Icons.receipt_long_outlined,
+      label: 'New Bill Alerts',
+      subtitle: 'Notify when someone adds a bill',
+      value: _notifyNewBill,
+      onChanged: (v) => setState(() => _notifyNewBill = v),
+    ),
+    _toggleRow(
+      icon: Icons.check_circle_outline,
+      label: 'Settlement Alerts',
+      subtitle: 'Notify when a payment is confirmed',
+      value: _notifySettlement,
+      onChanged: (v) => setState(() => _notifySettlement = v),
+    ),
+    _toggleRow(
+      icon: Icons.alarm_outlined,
+      label: 'Payment Reminders',
+      subtitle: 'Weekly nudge for pending debts',
+      value: _notifyReminders,
+      onChanged: (v) => setState(() => _notifyReminders = v),
+      isLast: true,
+    ),
+  ]);
+
+  // ── Settings ──────────────────────────────────────────────────────────────
+  // FIX 3: removed _cardList wrapper
+  Widget _buildSettings(BuildContext context) => Column(children: [
+    _toggleRow(
+      icon: Icons.fingerprint,
+      label: 'Biometric Lock',
+      subtitle: 'Use fingerprint to open app',
+      value: _biometricLock,
+      onChanged: (v) => setState(() => _biometricLock = v),
+    ),
+    _toggleRow(
+      icon: Icons.group_add_outlined,
+      label: 'Allow Group Invites',
+      subtitle: 'Let others add you to groups',
+      value: _allowGroupAdd,
+      onChanged: (v) => setState(() => _allowGroupAdd = v),
+    ),
+    _arrowRow(
+      icon: Icons.palette_outlined,
+      label: 'App Theme',
+      subtitle: _selectedTheme,
+      onTap: () => _showThemeSheet(context),
+    ),
+    _arrowRow(
+      icon: Icons.person_outline,
+      label: 'Display Name',
+      subtitle: _displayName,
+      onTap: () => _showEditProfileSheet(context),
+    ),
+    _arrowRow(
+      icon: Icons.currency_exchange_outlined,
+      label: 'Default Currency',
+      subtitle: 'LKR — Sri Lankan Rupee',
+      onTap: () {},
+      isLast: true,
+    ),
+  ]);
+
+  // ── Account actions ───────────────────────────────────────────────────────
+  Widget _buildAccountActions(BuildContext context) => Column(children: [
+    GestureDetector(
+      onTap: () => _showLogoutDialog(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: _kAccent.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kAccent.withOpacity(0.2)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout, color: _kAccent, size: 18),
+            SizedBox(width: 8),
+            Text('Log Out', style: TextStyle(
+                color: _kAccent, fontWeight: FontWeight.w600, fontSize: 15)),
+          ],
+        ),
       ),
-      child: Column(children: children),
-    );
-  }
+    ),
+    const SizedBox(height: 10),
+    GestureDetector(
+      onTap: () => _showDeleteAccountSheet(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: _kDanger.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kDanger.withOpacity(0.25)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.delete_forever_outlined, color: _kDanger, size: 18),
+            SizedBox(width: 8),
+            Text('Delete My Account', style: TextStyle(
+                color: _kDanger, fontWeight: FontWeight.w600, fontSize: 15)),
+          ],
+        ),
+      ),
+    ),
+  ]);
+
+  // ── Reusable row widgets ──────────────────────────────────────────────────
 
   Widget _toggleRow({
     required IconData icon,
@@ -1133,52 +950,37 @@ class _ProfilePageState extends State<ProfilePage> {
     required bool value,
     required ValueChanged<bool> onChanged,
     bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: _kAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: _kAccent, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _kText,
-                        )),
-                    Text(subtitle,
-                        style: const TextStyle(
-                            fontSize: 11, color: _kMuted)),
-                  ],
-                ),
-              ),
-              Switch(
-                value: value,
-                onChanged: onChanged,
-                activeColor: _kAccent,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ],
+  }) => Column(children: [
+    Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: _kAccent.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
           ),
+          child: Icon(icon, color: _kAccent, size: 18),
         ),
-        if (!isLast)
-          const Divider(height: 1, indent: 64, color: _kSilver),
-      ],
-    );
-  }
+        const SizedBox(width: 12),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w600, color: _kText)),
+            Text(subtitle, style: const TextStyle(
+                fontSize: 11, color: _kMuted)),
+          ],
+        )),
+        Switch(
+          value: value, onChanged: onChanged,
+          activeColor: _kAccent,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ]),
+    ),
+    if (!isLast) const Divider(height: 1, color: _kSilver),
+  ]);
 
   Widget _arrowRow({
     required IconData icon,
@@ -1186,59 +988,42 @@ class _ProfilePageState extends State<ProfilePage> {
     required String subtitle,
     required VoidCallback onTap,
     bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 13),
-            child: Row(
-              children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: _kAccent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: _kAccent, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: _kText,
-                          )),
-                      Text(subtitle,
-                          style: const TextStyle(
-                              fontSize: 11, color: _kMuted)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right,
-                    color: _kMuted, size: 18),
-              ],
+  }) => Column(children: [
+    GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: _kAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
+            child: Icon(icon, color: _kAccent, size: 18),
           ),
-        ),
-        if (!isLast)
-          const Divider(height: 1, indent: 64, color: _kSilver),
-      ],
-    );
-  }
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: _kText)),
+              Text(subtitle, style: const TextStyle(
+                  fontSize: 11, color: _kMuted)),
+            ],
+          )),
+          const Icon(Icons.chevron_right, color: _kMuted, size: 18),
+        ]),
+      ),
+    ),
+    if (!isLast) const Divider(height: 1, color: _kSilver),
+  ]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // BOTTOM SHEETS & DIALOGS
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── Edit Profile Sheet ──────────────────────────────────────────────────────
   void _showEditProfileSheet(BuildContext context) {
     final nameCtrl  = TextEditingController(text: _displayName);
     final emailCtrl = TextEditingController(text: _email);
@@ -1250,40 +1035,36 @@ class _ProfilePageState extends State<ProfilePage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _sheet(
         title: 'Edit Profile',
-        child: Column(
-          children: [
-            _sheetField(nameCtrl,  'Display Name',  Icons.person_outline),
-            const SizedBox(height: 14),
-            _sheetField(emailCtrl, 'Email Address', Icons.email_outlined,
-                keyboard: TextInputType.emailAddress),
-            const SizedBox(height: 14),
-            _sheetField(phoneCtrl, 'Phone Number',  Icons.phone_outlined,
-                keyboard: TextInputType.phone),
-            const SizedBox(height: 24),
-            _sheetButton('Save Changes', () {
-              setState(() {
-                _displayName  = nameCtrl.text;
-                _email        = emailCtrl.text;
-                _phone        = phoneCtrl.text;
-                _avatarLetter = _displayName.isNotEmpty
-                    ? _displayName[0].toUpperCase()
-                    : 'U';
-              });
-              Navigator.pop(context);
-            }),
-          ],
-        ),
+        child: Column(children: [
+          _sheetField(nameCtrl,  'Display Name',  Icons.person_outline),
+          const SizedBox(height: 14),
+          _sheetField(emailCtrl, 'Email Address', Icons.email_outlined,
+              keyboard: TextInputType.emailAddress),
+          const SizedBox(height: 14),
+          _sheetField(phoneCtrl, 'Phone Number',  Icons.phone_outlined,
+              keyboard: TextInputType.phone),
+          const SizedBox(height: 24),
+          _sheetButton('Save Changes', () {
+            setState(() {
+              _displayName  = nameCtrl.text;
+              _email        = emailCtrl.text;
+              _phone        = phoneCtrl.text;
+              _avatarLetter = _displayName.isNotEmpty
+                  ? _displayName[0].toUpperCase() : 'U';
+            });
+            Navigator.pop(context);
+          }),
+        ]),
       ),
     );
   }
 
-  // ── Add Card Sheet ──────────────────────────────────────────────────────────
   void _showAddCardSheet(BuildContext context) {
     final numberCtrl = TextEditingController();
     final nameCtrl   = TextEditingController();
     final expiryCtrl = TextEditingController();
     final cvvCtrl    = TextEditingController();
-    String cardType = 'Visa';
+    String cardType  = 'Visa';
 
     showModalBottomSheet(
       context: context,
@@ -1295,36 +1076,27 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Card type selector
-              Row(
-                children: ['Visa', 'Mastercard', 'Amex'].map((t) {
-                  final sel = cardType == t;
-                  return GestureDetector(
-                    onTap: () => setLocal(() => cardType = t),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: sel
-                            ? _kAccent
-                            : _kAccent.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: sel
-                                ? _kAccent
-                                : _kAccent.withOpacity(0.2)),
-                      ),
-                      child: Text(t,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: sel ? Colors.white : _kAccent,
-                          )),
+              Row(children: ['Visa', 'Mastercard', 'Amex'].map((t) {
+                final sel = cardType == t;
+                return GestureDetector(
+                  onTap: () => setLocal(() => cardType = t),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: sel ? _kAccent : _kAccent.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: sel ? _kAccent : _kAccent.withOpacity(0.2)),
                     ),
-                  );
-                }).toList(),
-              ),
+                    child: Text(t, style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: sel ? Colors.white : _kAccent,
+                    )),
+                  ),
+                );
+              }).toList()),
               const SizedBox(height: 18),
               _sheetField(numberCtrl, 'Card Number',
                   Icons.credit_card_outlined,
@@ -1333,35 +1105,24 @@ class _ProfilePageState extends State<ProfilePage> {
               _sheetField(nameCtrl, 'Cardholder Name',
                   Icons.person_outline),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _sheetField(expiryCtrl, 'MM / YY',
-                        Icons.calendar_today_outlined,
-                        keyboard: TextInputType.number),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _sheetField(cvvCtrl, 'CVV',
-                        Icons.lock_outline,
-                        keyboard: TextInputType.number,
-                        obscure: true),
-                  ),
-                ],
-              ),
+              Row(children: [
+                Expanded(child: _sheetField(expiryCtrl, 'MM / YY',
+                    Icons.calendar_today_outlined,
+                    keyboard: TextInputType.number)),
+                const SizedBox(width: 12),
+                Expanded(child: _sheetField(cvvCtrl, 'CVV',
+                    Icons.lock_outline,
+                    keyboard: TextInputType.number, obscure: true)),
+              ]),
               const SizedBox(height: 24),
               _sheetButton('Add Card', () {
                 if (numberCtrl.text.length >= 4) {
-                  setState(() {
-                    _cards.add({
-                      'type' : cardType,
-                      'last4': numberCtrl.text.length >= 4
-                          ? numberCtrl.text
-                          .substring(numberCtrl.text.length - 4)
-                          : '????',
-                      'color': _kAccent,
-                    });
-                  });
+                  setState(() => _cards.add({
+                    'type' : cardType,
+                    'last4': numberCtrl.text
+                        .substring(numberCtrl.text.length - 4),
+                    'color': _kAccent,
+                  }));
                 }
                 Navigator.pop(context);
               }),
@@ -1372,13 +1133,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ── Theme Sheet ─────────────────────────────────────────────────────────────
   void _showThemeSheet(BuildContext context) {
     final themes = [
-      {'name': 'Navy Blue',    'color': _kNavy},
-      {'name': 'Deep Purple',  'color': _kAccent},
-      {'name': 'Midnight',     'color': const Color(0xFF0A0A14)},
-      {'name': 'Ocean',        'color': const Color(0xFF0077B6)},
+      {'name': 'Navy Blue',   'color': _kNavy},
+      {'name': 'Deep Purple', 'color': _kAccent},
+      {'name': 'Midnight',    'color': const Color(0xFF0A0A14)},
+      {'name': 'Ocean',       'color': const Color(0xFF0077B6)},
     ];
 
     showModalBottomSheet(
@@ -1386,67 +1146,53 @@ class _ProfilePageState extends State<ProfilePage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _sheet(
         title: 'Choose Theme',
-        child: Column(
-          children: themes.map((t) {
-            final selected = _selectedTheme == t['name'];
-            return GestureDetector(
-              onTap: () {
-                setState(() => _selectedTheme = t['name'] as String);
-                Navigator.pop(context);
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? _kAccent.withOpacity(0.08)
-                      : _kSilver,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selected ? _kAccent : Colors.transparent,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 24, height: 24,
-                      decoration: BoxDecoration(
-                        color: t['color'] as Color,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Text(t['name'] as String,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: selected ? _kAccent : _kText,
-                        )),
-                    const Spacer(),
-                    if (selected)
-                      const Icon(Icons.check_circle,
-                          color: _kAccent, size: 18),
-                  ],
-                ),
+        child: Column(children: themes.map((t) {
+          final sel = _selectedTheme == t['name'];
+          return GestureDetector(
+            onTap: () {
+              setState(() => _selectedTheme = t['name'] as String);
+              Navigator.pop(context);
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: sel ? _kAccent.withOpacity(0.08) : _kSilver,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: sel ? _kAccent : Colors.transparent),
               ),
-            );
-          }).toList(),
-        ),
+              child: Row(children: [
+                Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                      color: t['color'] as Color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Text(t['name'] as String,
+                    style: TextStyle(fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: sel ? _kAccent : _kText))),
+                const Spacer(),
+                if (sel) const Icon(Icons.check_circle,
+                    color: _kAccent, size: 18),
+              ]),
+            ),
+          );
+        }).toList()),
       ),
     );
   }
 
-  // ── Logout dialog ───────────────────────────────────────────────────────────
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20)),
-        title: const Text('Log Out',
-            style: TextStyle(
-                fontWeight: FontWeight.w700, color: _kText)),
+        title: const Text('Log Out', style: TextStyle(
+            fontWeight: FontWeight.w700, color: _kText)),
         content: const Text(
             'Are you sure you want to log out of SmartPay?',
             style: TextStyle(color: _kMuted, fontSize: 14)),
@@ -1464,7 +1210,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             onPressed: () {
               Navigator.pop(context);
-              // TODO: clear session and navigate to login
+              // TODO: call _supabase.auth.signOut() before navigating
               Navigator.pushNamedAndRemoveUntil(
                   context, '/', (route) => false);
             },
@@ -1476,7 +1222,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ── Delete Account Sheet ────────────────────────────────────────────────────
   void _showDeleteAccountSheet(BuildContext context) {
     String? selectedReason;
     final reasons = [
@@ -1505,30 +1250,22 @@ class _ProfilePageState extends State<ProfilePage> {
                   color: _kDanger.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded,
-                        color: _kDanger, size: 18),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'This will permanently delete all your data, groups, and transaction history.',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: _kDanger,
-                            height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
+                child: const Row(children: [
+                  Icon(Icons.warning_amber_rounded,
+                      color: _kDanger, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'This will permanently delete all your data, '
+                        'groups, and transaction history.',
+                    style: TextStyle(
+                        fontSize: 12, color: _kDanger, height: 1.4),
+                  )),
+                ]),
               ),
               const SizedBox(height: 18),
               const Text('Why are you leaving?',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _kText,
-                  )),
+                  style: TextStyle(fontSize: 14,
+                      fontWeight: FontWeight.w700, color: _kText)),
               const SizedBox(height: 10),
               ...reasons.map((r) {
                 final sel = selectedReason == r;
@@ -1540,42 +1277,31 @@ class _ProfilePageState extends State<ProfilePage> {
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: sel
-                          ? _kDanger.withOpacity(0.08)
-                          : _kSilver,
+                          ? _kDanger.withOpacity(0.08) : _kSilver,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: sel ? _kDanger : Colors.transparent,
-                      ),
+                          color: sel ? _kDanger : Colors.transparent),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(r,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: sel ? _kDanger : _kText,
-                                fontWeight: sel
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              )),
-                        ),
-                        if (sel)
-                          const Icon(Icons.check_circle,
-                              color: _kDanger, size: 16),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Expanded(child: Text(r, style: TextStyle(
+                        fontSize: 13,
+                        color: sel ? _kDanger : _kText,
+                        fontWeight:
+                        sel ? FontWeight.w600 : FontWeight.w400,
+                      ))),
+                      if (sel) const Icon(Icons.check_circle,
+                          color: _kDanger, size: 16),
+                    ]),
                   ),
                 );
               }),
               const SizedBox(height: 20),
               SizedBox(
-                width: double.infinity,
-                height: 50,
+                width: double.infinity, height: 50,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: selectedReason != null
-                        ? _kDanger
-                        : _kDanger.withOpacity(0.3),
+                        ? _kDanger : _kDanger.withOpacity(0.3),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
@@ -1583,14 +1309,13 @@ class _ProfilePageState extends State<ProfilePage> {
                   onPressed: selectedReason != null
                       ? () {
                     Navigator.pop(context);
-                    // TODO: call delete account API
+                    // TODO: call Supabase delete user API
                     Navigator.pushNamedAndRemoveUntil(
                         context, '/', (route) => false);
                   }
                       : null,
                   child: const Text('Permanently Delete Account',
-                      style: TextStyle(
-                          color: Colors.white,
+                      style: TextStyle(color: Colors.white,
                           fontWeight: FontWeight.w600)),
                 ),
               ),
@@ -1601,47 +1326,41 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ── Sheet wrapper ───────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // SHARED HELPERS
+  // ══════════════════════════════════════════════════════════════════════════
+
   Widget _sheet({
     required String title,
     required Widget child,
     Color titleColor = _kText,
-  }) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24, right: 24, top: 12,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: _kSilver,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(title,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: titleColor,
-              )),
-          const SizedBox(height: 20),
-          child,
-        ],
-      ),
-    );
-  }
+  }) => Container(
+    padding: EdgeInsets.only(
+      left: 24, right: 24, top: 12,
+      bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+    ),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(child: Container(
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+              color: _kSilver, borderRadius: BorderRadius.circular(2)),
+        )),
+        const SizedBox(height: 16),
+        Text(title, style: TextStyle(
+            fontSize: 20, fontWeight: FontWeight.w700,
+            color: titleColor)),
+        const SizedBox(height: 20),
+        child,
+      ],
+    ),
+  );
 
   Widget _sheetField(
       TextEditingController ctrl,
@@ -1649,51 +1368,43 @@ class _ProfilePageState extends State<ProfilePage> {
       IconData icon, {
         TextInputType keyboard = TextInputType.text,
         bool obscure = false,
-      }) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: keyboard,
-      obscureText: obscure,
-      style: const TextStyle(fontSize: 14, color: _kText),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: _kMuted, fontSize: 13),
-        prefixIcon: Icon(icon, color: _kAccent, size: 18),
-        filled: true,
-        fillColor: _kSilver,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kAccent, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 14),
+      }) => TextField(
+    controller: ctrl,
+    keyboardType: keyboard,
+    obscureText: obscure,
+    style: const TextStyle(fontSize: 14, color: _kText),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: _kMuted, fontSize: 13),
+      prefixIcon: Icon(icon, color: _kAccent, size: 18),
+      filled: true,
+      fillColor: _kSilver,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
       ),
-    );
-  }
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _kAccent, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14, vertical: 14),
+    ),
+  );
 
-  Widget _sheetButton(String label, VoidCallback onTap) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _kAccent,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
-          elevation: 0,
-        ),
-        child: Text(label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 15,
-            )),
+  Widget _sheetButton(String label, VoidCallback onTap) => SizedBox(
+    width: double.infinity, height: 50,
+    child: ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _kAccent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14)),
+        elevation: 0,
       ),
-    );
-  }
+      child: Text(label, style: const TextStyle(
+          color: Colors.white, fontWeight: FontWeight.w600,
+          fontSize: 15)),
+    ),
+  );
 }
