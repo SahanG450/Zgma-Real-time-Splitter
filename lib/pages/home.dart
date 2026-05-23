@@ -346,7 +346,7 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Scan a QR to join',
+                Text('Add your Bill',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -361,8 +361,15 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward,
-              color: Color(0xFF5E5CE6), size: 20),
+          IconButton(onPressed: () {
+            Navigator.pushReplacementNamed(context, '/home');
+          },
+              icon: const Icon(
+                Icons.arrow_forward,
+                color: Color(0xFF5E5CE6),
+                size: 20,
+              ))
+
         ],
       ),
     );
