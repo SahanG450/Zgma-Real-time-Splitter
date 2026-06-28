@@ -5,6 +5,7 @@ import 'pages/intro.dart';
 import 'pages/home.dart';
 import 'pages/controllers/homePageloginController.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'pages/navigation_pages/addBill.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +39,7 @@ class ZgmaApp extends StatelessWidget {
         '/register':  (context) => const RegisterPage(),
         '/intro': (context) => const IntroPage(),
         '/home': (context) => const HomePage(),
+        '/add-bill': (context) => const AddBillPage(),
       },
     );
   }
