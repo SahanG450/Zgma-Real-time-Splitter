@@ -550,13 +550,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ── Bottom navigation bar ──────────────────────────────────────────────────
+  // ── Bottom navigation bar ──────────────────────────────────────────────────
   Widget _buildBottomNav() {
     final tabs = [
-      {'icon': Icons.home_outlined,         'label': 'Home'},
-      {'icon': Icons.swap_horiz_outlined,   'label': 'Debts'},
-      {'icon': null,                         'label': 'Scan'},   // center FAB
-      {'icon': Icons.notifications_outlined,'label': 'Alerts'},
-      {'icon': Icons.person_outline,        'label': 'Profile'},
+      {
+        'icon': Icons.home_outlined,
+        'label': 'Home',
+      },
+      {
+        'icon': Icons.swap_horiz_outlined,
+        'label': 'Debts',
+      },
+      {
+        'icon': Icons.receipt_long_outlined,
+        'label': 'Add Bill',
+      },
+      {
+        'icon': Icons.notifications_outlined,
+        'label': 'Alerts',
+      },
+      {
+        'icon': Icons.person_outline,
+        'label': 'Profile',
+      },
     ];
 
     return Container(
@@ -576,44 +592,37 @@ class _HomePageState extends State<HomePage> {
           height: 64,
           child: Row(
             children: List.generate(tabs.length, (i) {
-              final isScan = tabs[i]['label'] == 'Scan';
               final isActive = _selectedTab == i;
-
-              if (isScan) {
-                // ── Centre QR FAB ──────────────────────────────────────────
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.mediumImpact();
-                      setState(() => _selectedTab = i);
-                    },
-                    child: Center(
-                      child: Container(
-                        width: 56, height: 56,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF5E5CE6),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0x445E5CE6),
-                              blurRadius: 16,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.qr_code_scanner,
-                            color: Colors.white, size: 26),
-                      ),
-                    ),
-                  ),
-                );
-              }
 
               return Expanded(
                 child: GestureDetector(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    setState(() => _selectedTab = i);
+
+                    setState(() {
+                      _selectedTab = i;
+                    });
+
+                    switch (tabs[i]['label']) {
+                      case 'Home':
+                        break;
+
+                      case 'Debts':
+                        Navigator.pushNamed(context, '/debts');
+                        break;
+
+                      case 'Add Bill':
+                        Navigator.pushNamed(context, '/add-bill');
+                        break;
+
+                      case 'Alerts':
+                        Navigator.pushNamed(context, '/notifications');
+                        break;
+
+                      case 'Profile':
+                        Navigator.pushNamed(context, '/profile');
+                        break;
+                    }
                   },
                   behavior: HitTestBehavior.opaque,
                   child: Column(

@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'pages/getstart.dart';
 import 'pages/intro.dart';
 import 'pages/home.dart';
+import 'pages/controllers/homePageloginController.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'pages/navigation_pages/addBill.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +39,7 @@ class ZgmaApp extends StatelessWidget {
         '/register':  (context) => const RegisterPage(),
         '/intro': (context) => const IntroPage(),
         '/home': (context) => const HomePage(),
+        '/add-bill': (context) => const AddBillPage(),
       },
     );
   }
@@ -272,7 +275,7 @@ class _WelcomePageState extends State<WelcomePage>
 
                                       const Center(
                                         child: Text(
-                                          'Your Number',
+                                          'Sign in to Zgma',
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontSize: 24,
@@ -285,7 +288,7 @@ class _WelcomePageState extends State<WelcomePage>
 
                                       const Center(
                                         child: Text(
-                                          'We will send a verification code to this number',
+                                          'Enter your email and password to Logig sucessfully(tempory Solution)',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             color: Colors.white54,
@@ -294,66 +297,94 @@ class _WelcomePageState extends State<WelcomePage>
                                       ),
 
                                       const SizedBox(height: 28),
-                                      IntlPhoneField(
-                                        initialCountryCode: 'LK',
 
-                                        keyboardType: TextInputType.phone,
 
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                        ),
-
-                                        dropdownTextStyle: const TextStyle(
-                                          color: Colors.white,
-                                        ),
-
-                                        decoration: InputDecoration(
-                                          labelText: 'Phone Number',
-
-                                          labelStyle: const TextStyle(
-                                            color: Colors.white54,
-                                          ),
-
-                                          hintText: '77 123 4567',
-
-                                          hintStyle: const TextStyle(
-                                            color: Colors.white24,
-                                          ),
-
-                                          filled: true,
-                                          fillColor: Colors.white10,
-
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(16),
-
-                                            borderSide: const BorderSide(
-                                              color: Colors.white24,
-                                            ),
-                                          ),
-
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(16),
-
-                                            borderSide: const BorderSide(
-                                              color: Colors.deepPurple,
-                                              width: 2,
-                                            ),
-                                          ),
-                                        ),
-
-                                        onChanged: (phone) {
-                                          print(phone.completeNumber);
-                                        },
-
-                                        validator: (phone) {
-                                          if (phone == null || phone.number.length < 9) {
-                                            return 'Enter valid phone number';
-                                          }
-                                          return null;
-                                        },
+                                TextFormField(
+                                  controller: emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Email',
+                                    labelStyle: const TextStyle(
+                                      color: Colors.white54,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.email,
+                                      color: Colors.white54,
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.white10,
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(
+                                        color: Colors.white24,
                                       ),
-                                      const SizedBox(height: 24),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(
+                                        color: Colors.deepPurple,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Enter email';
+                                    }
+                                    return null;
+                                  },
+                                ),
+
+
+
+                                TextFormField(
+                                controller: passwordController,
+                                obscureText: true,
+                                style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                ),
+                                decoration: InputDecoration(
+                                labelText: 'Password',
+                                labelStyle: const TextStyle(
+                                color: Colors.white54,
+                                ),
+                                prefixIcon: const Icon(
+                                Icons.lock,
+                                color: Colors.white54,
+                                ),
+                                filled: true,
+                                fillColor: Colors.white10,
+                                enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                color: Colors.white24,
+                                ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                color: Colors.deepPurple,
+                                width: 2,
+                                ),
+                                ),
+                                ),
+                                validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                return 'Enter password';
+                                }
+                                return null;
+                                },
+                                ),
+
+
+
+
+                                const SizedBox(height: 24),
 
                                       SizedBox(
                                         width: double.infinity,
@@ -367,18 +398,11 @@ class _WelcomePageState extends State<WelcomePage>
                                               borderRadius: BorderRadius.circular(14),
                                             ),
                                           ),
-
-                                          onPressed: () {
-                                            Navigator.pop(context);
-
-                                            Navigator.pushReplacementNamed(
-                                              context,
-                                              '/home',
-                                            );
-                                          },
-
+                                            onPressed: () {
+                                              loginUser(context);
+                                            },
                                           child: const Text(
-                                            'Send OTP',
+                                            'Login',
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
