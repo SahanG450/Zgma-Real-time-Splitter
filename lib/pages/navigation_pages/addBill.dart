@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math';
+import './Classes/addBill.dart';
+import './Classes/abstract/addBill.dart';
 
 // ─── Theme Colors — matching home.dart exactly ────────────────────────────────
 const kBgPage     = Color(0xFFF0F2F8);   // same as Scaffold bg in home
@@ -17,8 +18,10 @@ const kTextSec    = Color(0xFF9E9E9E);
 const kBorder     = Color(0xFFF0F0F0);
 const kBorderFocus= Color(0xFF5E5CE6);
 
-// ─── Models ──────────────────────────────────────────────────────────────────
-enum SplitType { equal, amount, percentage, shares }
+// UI-level split selector (kept separate from the domain `SplitType`
+// abstract class in Classes/abstract/addBill.dart, which is a strategy
+// interface, not an enum).
+enum BillSplitType { equal, amount, percentage, shares }
 
 class PastBill {
   final String id, title, group, category, status;
@@ -72,11 +75,8 @@ class _AddBillPageState extends State<AddBillPage>
         children: [
           Column(
             children: [
-              // ── Gradient header ──────────────────────────────────────────
               _buildHeader(),
-              // ── Tab bar ──────────────────────────────────────────────────
               _buildTabBar(),
-              // ── Tab content ──────────────────────────────────────────────
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
@@ -89,8 +89,6 @@ class _AddBillPageState extends State<AddBillPage>
               ),
             ],
           ),
-
-          // ── Bottom nav (same as home.dart) ───────────────────────────────
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: _buildBottomNav(tabs),
@@ -276,14 +274,16 @@ class _ManualBillTabState extends State<_ManualBillTab> {
   final _amountCtrl = TextEditingController();
   final _descCtrl   = TextEditingController();
 
-  String?   _selectedGroup;
-  String    _category   = 'food';
-  SplitType _splitType  = SplitType.equal;
-  DateTime  _billDate   = DateTime.now();
-  bool      _qrGenerated = false;
-  String?   _generatedQr;
+  String?       _selectedGroup;
+  String        _category  = 'food';
+  BillSplitType _splitType = BillSplitType.equal;
+  DateTime      _billDate  = DateTime.now();
+  bool          _qrGenerated = false;
+  String?       _generatedQr;
 
   static const _groups = ['Ministry of Crab', 'PickMe to Galle', 'Beach Villa'];
+
+  // RESTORED — this was missing, causing "Undefined name '_categories'"
   static const _categories = [
     ('food',      '🍽️', 'Food'),
     ('transport', '🚗', 'Transport'),
@@ -293,23 +293,59 @@ class _ManualBillTabState extends State<_ManualBillTab> {
     ('other',     '📦', 'Other'),
   ];
 
+  Category _categoryFromKey(String key) {
+    switch (key) {
+      case 'food':       return Category.food;
+      case 'transport':  return Category.transport;
+      case 'groceries':  return Category.groceries;
+      case 'hotel':      return Category.hotel;
+      case 'fun':        return Category.entertainment; // key mismatch fix
+      case 'other':
+      default:           return Category.other;
+    }
+  }
+
+  SplitType _resolveSplitType(BillSplitType type) {
+    switch (type) {
+      case BillSplitType.equal:
+        return EqualSplit();
+      case BillSplitType.amount:
+        return AmountSplit();
+      case BillSplitType.percentage:
+      // TODO: build {participantId: percentage} once the participant
+      // picker exists — empty map is a placeholder so this compiles.
+        return PercentageSplit({});
+      case BillSplitType.shares:
+      // TODO: build {participantId: shares} once the participant
+      // picker exists.
+        return SharesSplit({});
+    }
+  }
+
   // API POINT: POST /api/v1/bills
   void _submitBill() {
-    if (!_formKey.currentState!.validate()) return;
     if (_selectedGroup == null) {
       _showSnack('Please select a group', isError: true);
       return;
     }
-    // Payload — total_amount stored as cents (integer)
-    // {
-    //   group_id, title, total_amount (cents), split_type,
-    //   category, description, bill_date, payer_id
-    // }
-    setState(() {
-      _qrGenerated = true;
-      _generatedQr = 'QR-${Random().nextInt(99999).toString().padLeft(5, '0')}';
-    });
-    _showSnack('Bill added — QR generated!');
+    if (!_formKey.currentState!.validate()) return;
+
+    final bill = ManualBill(
+      title: _titleCtrl.text.trim(),
+      totalAmount: double.parse(_amountCtrl.text),
+      groupId: _selectedGroup!,
+      category: _categoryFromKey(_category),     // String -> Category
+      splitType: _resolveSplitType(_splitType),   // BillSplitType -> SplitType instance
+      participants: const [],                     // TODO: wire up participant picker
+      billDate: _billDate,
+      description: _descCtrl.text.trim(),
+    );
+
+    print("===============================================================");
+    print(bill.toJson());
+
+    // Send to API
+    // createBill(bill);
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -865,22 +901,27 @@ class _CategoryGrid extends StatelessWidget {
   }
 }
 
+// FIXED — now uses BillSplitType (the UI enum) instead of SplitType
+// (the abstract strategy class from Classes/abstract/addBill.dart, which
+// has no `.values` because it is not an enum).
 class _SplitTypeRow extends StatelessWidget {
-  final SplitType selected;
-  final ValueChanged<SplitType> onChanged;
+  final BillSplitType selected;
+  final ValueChanged<BillSplitType> onChanged;
   const _SplitTypeRow({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: SplitType.values.map((t) {
+      children: BillSplitType.values.map((t) {
         final sel = selected == t;
         final label = t.name[0].toUpperCase() + t.name.substring(1);
         return Expanded(
           child: GestureDetector(
             onTap: () => onChanged(t),
             child: Container(
-              margin: EdgeInsets.only(right: t != SplitType.values.last ? 6 : 0),
+              margin: EdgeInsets.only(
+                right: t != BillSplitType.values.last ? 6 : 0,
+              ),
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: sel ? kAccent : Colors.white,

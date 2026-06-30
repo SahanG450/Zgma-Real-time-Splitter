@@ -23,7 +23,7 @@ Future<void> registerUser(BuildContext context) async {
         'name': usernameController.text,
         'email': emailController.text,
         'phone': phoneNumber,
-        'password':"sahan123#",
+        'password':"c",
       }),
     );
     print("Status Code ===============>: ${response.statusCode}");
