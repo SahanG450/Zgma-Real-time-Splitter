@@ -340,10 +340,12 @@ class _ManualBillTabState extends State<_ManualBillTab> {
       billDate: _billDate,
       description: _descCtrl.text.trim(),
     );
-
-    print("===============================================================");
-    print(bill.toJson());
-
+    try {
+      bill.validate();
+    } catch (e) {
+      _showSnack(e.toString(), isError: true);
+      return;
+    }
     // Send to API
     // createBill(bill);
   }
