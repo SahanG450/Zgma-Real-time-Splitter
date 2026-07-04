@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import './abstract/addBill.dart';
 // Bill Main class
 enum Category {
@@ -40,6 +42,13 @@ class Participant {
     required this.name,
     this.contribution = 0,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      "id": id,
+      "name": name,
+    };
+  }
 }
 
 //bill items
@@ -70,6 +79,7 @@ class ManualBill extends Bill {
     required super.billDate,
     required super.groupId,
     required super.description,
+    required super.sessionType,
     required super.participants,
   });
 
@@ -83,9 +93,9 @@ class ManualBill extends Bill {
       throw Exception("Amount must be greater than zero.");
     }
 
-    if (participants.isEmpty) {
-      throw Exception("At least one participant is required.");
-    }
+    // if (participants.isEmpty) {
+    //   throw Exception("At least one participant is required.");
+    // }
   }
 }
 
@@ -100,6 +110,7 @@ class ScanBill extends Bill {
     required super.splitType,
     required super.billDate,
     required super.participants,
+    required super.sessionType,
     required super.groupId,
     required super.description,
     required this.items,
@@ -136,6 +147,7 @@ class ScheduleBill extends Bill {
     required super.category,
     required super.splitType,
     required super.billDate,
+    required super.sessionType,
     required super.participants,
     required super.groupId,
     required super.description,
@@ -175,6 +187,13 @@ class EqualSplit extends SplitType {
       p.contribution = share;
     }
   }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      "type": "equal",
+    };
+  }
 }
 
 class AmountSplit extends SplitType {
@@ -199,6 +218,13 @@ class AmountSplit extends SplitType {
           "Amounts do not equal total bill.");
     }
   }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      "type": "amount",
+    };
+  }
 }
 
 class PercentageSplit extends SplitType {
@@ -219,6 +245,13 @@ class PercentageSplit extends SplitType {
     for (var p in participants) {
       p.contribution =totalAmount * percentages[p.id]! /100;
     }
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      "type": "persentage",
+    };
   }
 }
 
@@ -246,5 +279,12 @@ class SharesSplit extends SplitType {
               shares[p.id]! /
               totalShares;
     }
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      "type": "share",
+    };
   }
 }

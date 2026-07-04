@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import './Classes/addBill.dart';
 import './Classes/abstract/addBill.dart';
+import './controllers/addBill.dart';
 
 // ─── Theme Colors — matching home.dart exactly ────────────────────────────────
 const kBgPage     = Color(0xFFF0F2F8);   // same as Scaffold bg in home
@@ -332,6 +333,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
 
     final bill = ManualBill(
       title: _titleCtrl.text.trim(),
+      sessionType: "manual",
       totalAmount: double.parse(_amountCtrl.text),
       groupId: _selectedGroup!,
       category: _categoryFromKey(_category),     // String -> Category
@@ -342,6 +344,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
     );
     try {
       bill.validate();
+      createBill(bill);
     } catch (e) {
       _showSnack(e.toString(), isError: true);
       return;

@@ -8,6 +8,7 @@ abstract class SplitType {
       List<Participant> participants,
       double totalAmount,
       );
+  Map<String, dynamic> toJson();
 }
 
 abstract class Bill {
@@ -19,6 +20,7 @@ abstract class Bill {
   SplitType splitType;
   DateTime billDate;
   String description;
+  String sessionType;
   List<Participant> participants;
 
   Bill({
@@ -29,7 +31,8 @@ abstract class Bill {
     required this.billDate,
     required this.participants,
     required this.groupId,
-    required this.description
+    required this.description,
+    required this.sessionType
   });
 
   void calculateSplit() {
@@ -39,16 +42,26 @@ abstract class Bill {
     );
   }
 
-Map<String, dynamic> toJson() {
-  return {
-    "title": title,
-    "amount": totalAmount,
-    "groupId": groupId,
-    "category": category,
-    "splitType": splitType,
-    "billDate": billDate.toIso8601String(),
-    "description": description,
-  };
-}
+  Map<String, dynamic> toJson() {
+    return {
+      "title": title,
+      "amount": totalAmount,
+      "groupId": groupId,
+      "sessionType": sessionType,
+
+      // Enum -> String
+      "category": category.name,
+      // or category.displayName if your backend expects "Food", "Transport", etc.
+
+      "splitType": splitType.toJson(), // if SplitType is a class
+
+      "billDate": billDate.toIso8601String(),
+      "description": description,
+
+      "participants": participants
+          .map((p) => p.toJson())
+          .toList(),
+    };
+  }
   void validate();
 }

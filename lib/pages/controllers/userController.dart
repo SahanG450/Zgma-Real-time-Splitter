@@ -14,7 +14,7 @@ Future<void> registerUser(BuildContext context) async {
   try {
     final response = await http.post(
       Uri.parse(
-        'http://10.0.2.2:3001/auth/register',
+        'http://10.0.2.2:3001/api/v1/auth/register',
       ),
       headers: {
         'Content-Type': 'application/json',
@@ -23,7 +23,7 @@ Future<void> registerUser(BuildContext context) async {
         'name': usernameController.text,
         'email': emailController.text,
         'phone': phoneNumber,
-        'password':"c",
+        'password':"sahaN123#",
       }),
     );
     print("Status Code ===============>: ${response.statusCode}");
