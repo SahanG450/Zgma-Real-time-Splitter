@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import './Classes/addBill.dart';
+import './Classes/session.dart';
 import './Classes/abstract/addBill.dart';
 import './controllers/addBill.dart';
+import './sessionSummery.dart';
 
 // ─── Theme Colors — matching home.dart exactly ────────────────────────────────
 const kBgPage     = Color(0xFFF0F2F8);   // same as Scaffold bg in home
@@ -263,6 +265,12 @@ class _AddBillPageState extends State<AddBillPage>
 // ─────────────────────────────────────────────────────────────────────────────
 //  TAB 1 — MANUAL BILL
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB 1 — MANUAL BILL
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB 1 — MANUAL BILL
+// ─────────────────────────────────────────────────────────────────────────────
 class _ManualBillTab extends StatefulWidget {
   const _ManualBillTab();
   @override
@@ -279,12 +287,10 @@ class _ManualBillTabState extends State<_ManualBillTab> {
   String        _category  = 'food';
   BillSplitType _splitType = BillSplitType.equal;
   DateTime      _billDate  = DateTime.now();
-  bool          _qrGenerated = false;
-  String?       _generatedQr;
+  bool          _isSubmitting = false;
 
   static const _groups = ['Ministry of Crab', 'PickMe to Galle', 'Beach Villa'];
 
-  // RESTORED — this was missing, causing "Undefined name '_categories'"
   static const _categories = [
     ('food',      '🍽️', 'Food'),
     ('transport', '🚗', 'Transport'),
@@ -300,7 +306,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
       case 'transport':  return Category.transport;
       case 'groceries':  return Category.groceries;
       case 'hotel':      return Category.hotel;
-      case 'fun':        return Category.entertainment; // key mismatch fix
+      case 'fun':        return Category.entertainment;
       case 'other':
       default:           return Category.other;
     }
@@ -313,18 +319,14 @@ class _ManualBillTabState extends State<_ManualBillTab> {
       case BillSplitType.amount:
         return AmountSplit();
       case BillSplitType.percentage:
-      // TODO: build {participantId: percentage} once the participant
-      // picker exists — empty map is a placeholder so this compiles.
         return PercentageSplit({});
       case BillSplitType.shares:
-      // TODO: build {participantId: shares} once the participant
-      // picker exists.
         return SharesSplit({});
     }
   }
 
-  // API POINT: POST /api/v1/bills
-  void _submitBill() {
+  // API POINT: POST /api/session/create
+  Future<void> _submitBill() async {
     if (_selectedGroup == null) {
       _showSnack('Please select a group', isError: true);
       return;
@@ -336,21 +338,33 @@ class _ManualBillTabState extends State<_ManualBillTab> {
       sessionType: "manual",
       totalAmount: double.parse(_amountCtrl.text),
       groupId: _selectedGroup!,
-      category: _categoryFromKey(_category),     // String -> Category
-      splitType: _resolveSplitType(_splitType),   // BillSplitType -> SplitType instance
-      participants: const [],                     // TODO: wire up participant picker
+      category: _categoryFromKey(_category),
+      splitType: _resolveSplitType(_splitType),
+      participants: const [],
       billDate: _billDate,
       description: _descCtrl.text.trim(),
     );
+
     try {
       bill.validate();
-      createBill(bill);
     } catch (e) {
       _showSnack(e.toString(), isError: true);
       return;
     }
-    // Send to API
-    // createBill(bill);
+
+    setState(() => _isSubmitting = true);
+    try {
+      final result = await createBill(bill);
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => SessionSummaryPage(result: result)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(e.toString(), isError: true);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -391,7 +405,6 @@ class _ManualBillTabState extends State<_ManualBillTab> {
             const SizedBox(height: 14),
 
             _FieldLabel('Group'),
-            // API POINT: GET /api/v1/groups
             _GroupDropdown(
               groups: _groups,
               selected: _selectedGroup,
@@ -430,15 +443,10 @@ class _ManualBillTabState extends State<_ManualBillTab> {
             const SizedBox(height: 22),
 
             _PrimaryButton(
-              label: 'Add Bill & Generate QR',
+              label: _isSubmitting ? 'Creating bill…' : 'Add Bill & Generate QR',
               icon: Icons.qr_code_rounded,
-              onTap: _submitBill,
+              onTap: _isSubmitting ? null : _submitBill,
             ),
-
-            if (_qrGenerated && _generatedQr != null) ...[
-              const SizedBox(height: 20),
-              _QrResultCard(qrCode: _generatedQr!),
-            ],
 
             const SizedBox(height: 28),
             const _PastBillsSection(),
@@ -448,7 +456,6 @@ class _ManualBillTabState extends State<_ManualBillTab> {
     );
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  TAB 2 — SCAN BILL
 // ─────────────────────────────────────────────────────────────────────────────
