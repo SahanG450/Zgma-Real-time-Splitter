@@ -4,6 +4,7 @@ import './Classes/addBill.dart';
 import './Classes/session.dart';
 import './Classes/abstract/addBill.dart';
 import './controllers/addBill.dart';
+import './controllers/group_controller.dart';
 import './sessionSummery.dart';
 
 // ─── Theme Colors — matching home.dart exactly ────────────────────────────────
@@ -289,7 +290,30 @@ class _ManualBillTabState extends State<_ManualBillTab> {
   DateTime      _billDate  = DateTime.now();
   bool          _isSubmitting = false;
 
-  static const _groups = ['Ministry of Crab', 'PickMe to Galle', 'Beach Villa'];
+  static const tempuserid = "2d45d11c-eddf-4a9c-b70e-0ac23bcc3a54";
+  List<String> _groups = [];
+
+  @override
+  void initState() {
+    super.initState();
+    print("DEBUG: _ManualBillTab initState");
+    _loadGroups();
+  }
+
+  Future<void> _loadGroups() async {
+    print("DEBUG: _loadGroups UI triggered");
+    try {
+      final groups = await getGroups(tempuserid);
+      print("DEBUG: _loadGroups UI success: Found ${groups.length} groups");
+      if (mounted) {
+        setState(() {
+          _groups = groups;
+        });
+      }
+    } catch (e) {
+      print("DEBUG: _loadGroups UI error: $e");
+    }
+  }
 
   static const _categories = [
     ('food',      '🍽️', 'Food'),
@@ -409,6 +433,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
               groups: _groups,
               selected: _selectedGroup,
               onChanged: (v) => setState(() => _selectedGroup = v),
+              onRefresh: _loadGroups,
             ),
             const SizedBox(height: 10),
 
@@ -837,7 +862,14 @@ class _GroupDropdown extends StatelessWidget {
   final List<String> groups;
   final String? selected;
   final ValueChanged<String?> onChanged;
-  const _GroupDropdown({required this.groups, required this.selected, required this.onChanged});
+  final VoidCallback onRefresh;
+
+  const _GroupDropdown({
+    required this.groups,
+    required this.selected,
+    required this.onChanged,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -851,8 +883,14 @@ class _GroupDropdown extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: selected,
-          hint: const Text('Select a group',
-              style: TextStyle(color: kTextSec, fontSize: 14)),
+          hint: Text(groups.isEmpty ? 'Tap to load groups...' : 'Select a group',
+              style: const TextStyle(color: kTextSec, fontSize: 14)),
+          onTap: () {
+            if (groups.isEmpty) {
+              print("DEBUG: Droown tapped while empty, calling onRefresh...");
+              onRefresh();
+            }
+          },
           dropdownColor: Colors.white,
           iconEnabledColor: kTextSec,
           style: const TextStyle(color: kTextPrim, fontSize: 14),
