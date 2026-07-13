@@ -410,7 +410,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
               selected: _selectedGroup,
               onChanged: (v) => setState(() => _selectedGroup = v),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
 
             _FieldLabel('Category'),
             _CategoryGrid(
@@ -418,7 +418,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
               selected: _category,
               onChanged: (v) => setState(() => _category = v),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
 
             _FieldLabel('Split type'),
             _SplitTypeRow(
@@ -745,7 +745,7 @@ class _FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Text(text,
           style: const TextStyle(
               color: kTextPrim, fontSize: 13, fontWeight: FontWeight.w600)),
@@ -876,6 +876,7 @@ class _CategoryGrid extends StatelessWidget {
     return GridView.count(
       crossAxisCount: 3,
       shrinkWrap: true,
+      padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 8, crossAxisSpacing: 8,
       childAspectRatio: 2.5,
