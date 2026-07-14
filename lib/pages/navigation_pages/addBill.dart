@@ -1,14 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import './Classes/addBill.dart';
-import './Classes/session.dart';
 import './Classes/abstract/addBill.dart';
 import './controllers/addBill.dart';
 import './controllers/group_controller.dart';
+import './controllers/scan_controller.dart';
 import './sessionSummery.dart';
 
 // ─── Theme Colors — matching home.dart exactly ────────────────────────────────
-const kBgPage     = Color(0xFFF0F2F8);   // same as Scaffold bg in home
+const kBgPage     = Color(0xFFF0F2F8);   // same as Scaffd bg in home
 const kBgCard     = Colors.white;
 const kBgField    = Color(0xFFF5F6FA);
 const kHeaderFrom = Color(0xFF0B0B55);   // gradient start
@@ -143,7 +145,7 @@ class _AddBillPageState extends State<AddBillPage>
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.history_rounded,
@@ -167,7 +169,7 @@ class _AddBillPageState extends State<AddBillPage>
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -303,7 +305,7 @@ class _ManualBillTabState extends State<_ManualBillTab> {
   Future<void> _loadGroups() async {
     debugPrint("DEBUG: _loadGroups UI triggered");
     try {
-      final groups = await getGroups(tempuserid);
+      final List<Map<String, String>> groups = await getGroups(tempuserid);
       debugPrint("DEBUG: _loadGroups UI success: Found ${groups.length} groups");
       if (mounted) {
         setState(() {
@@ -497,14 +499,58 @@ class _ScanBillTab extends StatefulWidget {
 class _ScanBillTabState extends State<_ScanBillTab> {
   bool _scanning = false;
   bool _scanned  = false;
+  
+  final _titleCtrl  = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _picker     = ImagePicker();
 
-  // API POINT: POST /api/v1/ocr/scan  (multipart image)
-  // Returns: { success, data: { title, total_amount, items[], provider_id? } }
-  void _startScan() {
+  Future<void> _startScan() async {
+    // 1. Take/Pick Picture
+    final XFile? photo = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
+    
+    if (photo == null) return;
+
     setState(() { _scanning = true; _scanned = false; });
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() { _scanning = false; _scanned = true; });
-    });
+    
+    try {
+      // 2. Send to API (multipart)
+      final result = await scanReceipt(File(photo.path));
+      
+      if (mounted) {
+        setState(() {
+          _scanning = false;
+          _scanned  = true;
+          // 3. Fill form with OCR data
+          _titleCtrl.text  = result['title']?.toString() ?? '';
+          _amountCtrl.text = result['total_amount']?.toString() ?? '';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { _scanning = false; });
+        _showSnack(e.toString(), isError: true);
+      }
+    }
+  }
+
+  void _showSnack(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600)),
+      backgroundColor: isError ? kRed : kGreen,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+    ));
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _amountCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -542,14 +588,14 @@ class _ScanBillTabState extends State<_ScanBillTab> {
 
           if (!_scanned)
             _PrimaryButton(
-              label: _scanning ? 'Scanning…' : 'Open Camera / Upload Receipt',
+              label: _scanning ? 'Scanning…' : 'Open Camera / Take Picture',
               icon: _scanning ? Icons.crop_free_rounded : Icons.camera_alt_rounded,
               onTap: _scanning ? null : _startScan,
             ),
 
           if (_scanned) ...[
             const SizedBox(height: 6),
-            _ScannedBillForm(),
+            _ScannedBillForm(titleCtrl: _titleCtrl, amountCtrl: _amountCtrl),
           ],
 
           const SizedBox(height: 28),
@@ -631,6 +677,11 @@ class _ScannedPreview extends StatelessWidget {
 }
 
 class _ScannedBillForm extends StatelessWidget {
+  final TextEditingController titleCtrl;
+  final TextEditingController amountCtrl;
+  
+  const _ScannedBillForm({required this.titleCtrl, required this.amountCtrl, super.key});
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -643,17 +694,19 @@ class _ScannedBillForm extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         _FieldLabel('Bill title'),
-        _StyledField(initialValue: 'Ministry of Crab — Table 4', hint: ''),
+        _StyledField(controller: titleCtrl, hint: 'e.g. Cafe Lunch'),
         const SizedBox(height: 12),
         _FieldLabel('Total amount'),
-        _StyledField(initialValue: '18400', hint: '',
+        _StyledField(controller: amountCtrl, hint: '0.00',
             keyboardType: TextInputType.number),
         const SizedBox(height: 18),
         // API POINT: POST /api/v1/bills
         _PrimaryButton(
           label: 'Confirm & Add Bill',
           icon: Icons.check_circle_outline_rounded,
-          onTap: () {},
+          onTap: () {
+            // Implement OCR bill submission logic
+          },
         ),
       ],
     );

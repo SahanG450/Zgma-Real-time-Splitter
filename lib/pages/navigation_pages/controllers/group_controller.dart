@@ -12,7 +12,7 @@ Future<List<Map<String, String>>> getGroups(String userid) async {
       body: jsonEncode({'userId': userid}),
     );
   } catch (e) {
-    debugPrint("DEBUG: API Connection Error: $e");
+    debugPrint("DEBUG: API Connecion Error: $e");
     throw Exception('Could not reach the server. Check your connection and try again.');
   }
 
@@ -23,7 +23,7 @@ Future<List<Map<String, String>>> getGroups(String userid) async {
     final List<dynamic> dataList = jsonResponse['data'] as List<dynamic>;
     
     // Return list of maps with both id and name
-    return dataList.map((group) => {
+    return dataList.map<Map<String, String>>((group) => {
       'id': group['id'].toString(),
       'name': group['name'].toString(),
     }).toList();
