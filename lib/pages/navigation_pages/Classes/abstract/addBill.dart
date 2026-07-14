@@ -15,7 +15,7 @@ abstract class Bill {
 
   String title;
   double totalAmount;
-  String groupId;
+  String? groupId;
   Category category;
   SplitType splitType;
   DateTime billDate;

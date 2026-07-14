@@ -284,34 +284,34 @@ class _ManualBillTabState extends State<_ManualBillTab> {
   final _amountCtrl = TextEditingController();
   final _descCtrl   = TextEditingController();
 
-  String?       _selectedGroup;
+  String?       _selectedGroupId; // Stores group ID or 'NEW_GROUP'
   String        _category  = 'food';
   BillSplitType _splitType = BillSplitType.equal;
   DateTime      _billDate  = DateTime.now();
   bool          _isSubmitting = false;
 
   static const tempuserid = "2d45d11c-eddf-4a9c-b70e-0ac23bcc3a54";
-  List<String> _groups = [];
+  List<Map<String, String>> _groups = [];
 
   @override
   void initState() {
     super.initState();
-    print("DEBUG: _ManualBillTab initState");
+    debugPrint("DEBUG: _ManualBillTab initState");
     _loadGroups();
   }
 
   Future<void> _loadGroups() async {
-    print("DEBUG: _loadGroups UI triggered");
+    debugPrint("DEBUG: _loadGroups UI triggered");
     try {
       final groups = await getGroups(tempuserid);
-      print("DEBUG: _loadGroups UI success: Found ${groups.length} groups");
+      debugPrint("DEBUG: _loadGroups UI success: Found ${groups.length} groups");
       if (mounted) {
         setState(() {
           _groups = groups;
         });
       }
     } catch (e) {
-      print("DEBUG: _loadGroups UI error: $e");
+      debugPrint("DEBUG: _loadGroups UI error: $e");
     }
   }
 
@@ -351,17 +351,21 @@ class _ManualBillTabState extends State<_ManualBillTab> {
 
   // API POINT: POST /api/session/create
   Future<void> _submitBill() async {
-    if (_selectedGroup == null) {
+    if (_selectedGroupId == null) {
       _showSnack('Please select a group', isError: true);
       return;
     }
     if (!_formKey.currentState!.validate()) return;
 
+    // Use null if 'NEW_GROUP' is selected, otherwise use the actual ID
+    final String? effectiveGroupId = 
+        (_selectedGroupId == 'NEW_GROUP') ? null : _selectedGroupId;
+
     final bill = ManualBill(
       title: _titleCtrl.text.trim(),
       sessionType: "manual",
       totalAmount: double.parse(_amountCtrl.text),
-      groupId: _selectedGroup!,
+      groupId: effectiveGroupId,
       category: _categoryFromKey(_category),
       splitType: _resolveSplitType(_splitType),
       participants: const [],
@@ -431,8 +435,8 @@ class _ManualBillTabState extends State<_ManualBillTab> {
             _FieldLabel('Group'),
             _GroupDropdown(
               groups: _groups,
-              selected: _selectedGroup,
-              onChanged: (v) => setState(() => _selectedGroup = v),
+              selectedId: _selectedGroupId,
+              onChanged: (id) => setState(() => _selectedGroupId = id),
               onRefresh: _loadGroups,
             ),
             const SizedBox(height: 10),
@@ -858,46 +862,243 @@ class _AmountField extends StatelessWidget {
   }
 }
 
-class _GroupDropdown extends StatelessWidget {
-  final List<String> groups;
-  final String? selected;
+class _GroupDropdown extends StatefulWidget {
+  final List<Map<String, String>> groups;
+  final String? selectedId;
   final ValueChanged<String?> onChanged;
   final VoidCallback onRefresh;
 
   const _GroupDropdown({
     required this.groups,
-    required this.selected,
+    required this.selectedId,
     required this.onChanged,
     required this.onRefresh,
   });
 
   @override
+  State<_GroupDropdown> createState() => _GroupDropdownState();
+}
+
+class _GroupDropdownState extends State<_GroupDropdown> {
+  void _showAllGroups() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _GroupSearchSheet(
+        groups: widget.groups,
+        selectedId: widget.selectedId,
+        onSelected: (val) {
+          widget.onChanged(val);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show first 4 groups as recent
+    final recentGroups = widget.groups.take(4).toList();
+    const addNewLabel = 'New Group'; // Special label for auto-creation
+    const addNewId = 'NEW_GROUP';    // Special ID for logic
+    
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _SelectionChip(
+          label: addNewLabel,
+          icon: Icons.add_box_outlined,
+          isSelected: widget.selectedId == addNewId,
+          onTap: () {
+             widget.onChanged(addNewId);
+             // Show info alert/snack
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(
+                 content: const Text('A new group will be created automatically based on this bill.'),
+                 backgroundColor: kAccent,
+                 duration: const Duration(seconds: 3),
+                 behavior: SnackBarBehavior.floating,
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+               ),
+             );
+          },
+        ),
+        
+        // Recent Groups
+        ...recentGroups.map((group) {
+          final isSelected = widget.selectedId == group['id'];
+          return _SelectionChip(
+            label: group['name']!,
+            isSelected: isSelected,
+            onTap: () => widget.onChanged(group['id']),
+          );
+        }),
+
+        // More Button
+        if (widget.groups.length > 4)
+          _SelectionChip(
+            label: 'More...',
+            icon: Icons.grid_view_rounded,
+            onTap: _showAllGroups,
+            isAction: true,
+          ),
+      ],
+    );
+  }
+}
+
+class _SelectionChip extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final bool isSelected;
+  final bool isAction;
+  final VoidCallback onTap;
+
+  const _SelectionChip({
+    required this.label,
+    this.icon,
+    this.isSelected = false,
+    this.isAction = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = isSelected ? kAccent : (isAction ? kBgField : Colors.white);
+    final textColor = isSelected ? Colors.white : (isAction ? kAccent : kTextPrim);
+    final borderColor = isSelected ? kAccent : kBorder;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(color: kAccent.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))
+            else
+              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 1)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: textColor),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 13,
+                fontWeight: isSelected || isAction ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupSearchSheet extends StatefulWidget {
+  final List<Map<String, String>> groups;
+  final String? selectedId;
+  final ValueChanged<String> onSelected;
+
+  const _GroupSearchSheet({
+    required this.groups,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  @override
+  State<_GroupSearchSheet> createState() => _GroupSearchSheetState();
+}
+
+class _GroupSearchSheetState extends State<_GroupSearchSheet> {
+  final _searchCtrl = TextEditingController();
+  List<Map<String, String>> _filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.groups;
+  }
+
+  void _filter(String query) {
+    setState(() {
+      _filtered = widget.groups
+          .where((g) => g['name']!.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kBorder),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selected,
-          hint: Text(groups.isEmpty ? 'Tap to load groups...' : 'Select a group',
-              style: const TextStyle(color: kTextSec, fontSize: 14)),
-          onTap: () {
-            if (groups.isEmpty) {
-              print("DEBUG: Droown tapped while empty, calling onRefresh...");
-              onRefresh();
-            }
-          },
-          dropdownColor: Colors.white,
-          iconEnabledColor: kTextSec,
-          style: const TextStyle(color: kTextPrim, fontSize: 14),
-          isExpanded: true,
-          items: groups.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-          onChanged: onChanged,
-        ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: kBorder, borderRadius: BorderRadius.circular(2))),
+          
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+            child: Row(
+              children: [
+                const Text('Select Group', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrim)),
+                const Spacer(),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, color: kTextSec)),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: _filter,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search groups...',
+                prefixIcon: const Icon(Icons.search_rounded, color: kTextSec, size: 20),
+                filled: true,
+                fillColor: kBgField,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+            ),
+          ),
+
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              itemCount: _filtered.length,
+              itemBuilder: (context, i) {
+                final group = _filtered[i];
+                final isSel = group['id'] == widget.selectedId;
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: Text(group['name']!, style: TextStyle(color: kTextPrim, fontWeight: isSel ? FontWeight.w700 : FontWeight.w400)),
+                  trailing: isSel ? const Icon(Icons.check_circle_rounded, color: kAccent) : null,
+                  onTap: () => widget.onSelected(group['id']!),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

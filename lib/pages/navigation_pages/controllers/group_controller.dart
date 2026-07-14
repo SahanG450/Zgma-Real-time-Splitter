@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-Future<List<String>> getGroups(String userid) async {
-  print("DEBUG: API getGroups called for userId: $userid");
+Future<List<Map<String, String>>> getGroups(String userid) async {
+  debugPrint("DEBUG: API getGroups called for userId: $userid");
   late final http.Response response;
   try {
     response = await http.post(
@@ -11,18 +12,21 @@ Future<List<String>> getGroups(String userid) async {
       body: jsonEncode({'userId': userid}),
     );
   } catch (e) {
-    print("DEBUG: API Connection Error: $e");
+    debugPrint("DEBUG: API Connection Error: $e");
     throw Exception('Could not reach the server. Check your connection and try again.');
   }
 
-  print("DEBUG: API Response: ${response.statusCode} - ${response.body}");
+  debugPrint("DEBUG: API Response: ${response.statusCode} - ${response.body}");
 
   if (response.statusCode == 200) {
     final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
     final List<dynamic> dataList = jsonResponse['data'] as List<dynamic>;
     
-    // Extract only the 'name' field from each group object
-    return dataList.map((group) => group['name'].toString()).toList();
+    // Return list of maps with both id and name
+    return dataList.map((group) => {
+      'id': group['id'].toString(),
+      'name': group['name'].toString(),
+    }).toList();
   } else {
     throw Exception('Failed to load groups. Status: ${response.statusCode}');
   }
