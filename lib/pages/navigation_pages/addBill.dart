@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import './Classes/addBill.dart';
 import './Classes/abstract/addBill.dart';
 import './controllers/addBill.dart';
@@ -505,33 +506,37 @@ class _ScanBillTabState extends State<_ScanBillTab> {
   final _picker     = ImagePicker();
 
   Future<void> _startScan() async {
-    // 1. Take/Pick Picture
-    final XFile? photo = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 85,
-    );
-    
-    if (photo == null) return;
-
+    // FOR TESTING: Use asset image instead of camera
+    debugPrint("DEBUG: Using test asset image: lib/assets/testImage/img.png");
     setState(() { _scanning = true; _scanned = false; });
-    
+
     try {
-      // 2. Send to API (multipart)
-      final result = await scanReceipt(File(photo.path));
+      // 1. Load asset bytes
+      final ByteData data = await rootBundle.load('lib/assets/testImage/img.png');
+      final List<int> bytes = data.buffer.asUint8List();
+
+      // 2. Save to temp file (multipart needs a file path)
+      final tempDir = await getTemporaryDirectory();
+      final File tempFile = File('${tempDir.path}/test_receipt.png');
+      await tempFile.writeAsBytes(bytes);
+
+      // 3. Send to API (multipart)
+      final result = await scanReceipt(tempFile);
       
       if (mounted) {
         setState(() {
           _scanning = false;
           _scanned  = true;
-          // 3. Fill form with OCR data
+          // 4. Fill form with OCR data
           _titleCtrl.text  = result['title']?.toString() ?? '';
           _amountCtrl.text = result['total_amount']?.toString() ?? '';
         });
       }
     } catch (e) {
+      debugPrint("DEBUG: Test Scan Error: $e");
       if (mounted) {
         setState(() { _scanning = false; });
-        _showSnack(e.toString(), isError: true);
+        _showSnack("Scan failed: $e", isError: true);
       }
     }
   }

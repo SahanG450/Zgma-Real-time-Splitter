@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   image_picker: ^1.0.7
+  path_provider: ^2.1.2
 
 
 
@@ -60,6 +61,7 @@ flutter:
     - lib/assets/image/intro_2.png
     - lib/assets/image/intro_3.png
     - lib/assets/image/intro_4.png
+    - lib/assets/testImage/img.png
       # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

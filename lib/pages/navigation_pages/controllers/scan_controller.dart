@@ -9,7 +9,7 @@ Future<Map<String, dynamic>> scanReceipt(File imageFile) async {
   debugPrint("DEBUG: scanReceipt called with file: ${imageFile.path}");
   
   // Assuming 3002 based on the group controller port
-  final url = Uri.parse('http://10.0.2.2:3002/api/v1/ocr/scan');
+  final url = Uri.parse('http://10.0.2.2:3000/api/session/orc');
   
   try {
     var request = http.MultipartRequest('POST', url);
@@ -26,7 +26,7 @@ Future<Map<String, dynamic>> scanReceipt(File imageFile) async {
     var streamedResponse = await request.send();
     var response = await http.Response.fromStream(streamedResponse);
     
-    debugPrint("DEBUG: Scan API Response: ${response.statusCode} - ${response.body}");
+    debugPrint("DEBUG: Scan A Response: ${response.statusCode} - ${response.body}");
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       final decoded = jsonDecode(response.body);
