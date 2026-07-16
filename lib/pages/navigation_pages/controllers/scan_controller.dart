@@ -10,7 +10,6 @@ Future<Map<String, dynamic>> scanReceipt(File imageFile) async {
   
   // Assuming 3002 based on the group controller port
   final url = Uri.parse('http://10.0.2.2:3002/orc');
-
   
   try {
     var request = http.MultipartRequest('POST', url);
@@ -32,7 +31,12 @@ Future<Map<String, dynamic>> scanReceipt(File imageFile) async {
     if (response.statusCode == 200 || response.statusCode == 201) {
       final decoded = jsonDecode(response.body);
       if (decoded['success'] == true) {
-        return decoded['data'] as Map<String, dynamic>;
+        final data = decoded['data'];
+        // Extraction logic for the nested "result" object
+        if (data is Map<String, dynamic> && data.containsKey('result')) {
+          return data['result'] as Map<String, dynamic>;
+        }
+        return data as Map<String, dynamic>;
       }
       throw Exception(decoded['message'] ?? 'OCR processing failed');
     } else {

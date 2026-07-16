@@ -205,7 +205,7 @@ class _AddBillPageState extends State<AddBillPage>
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -267,7 +267,7 @@ class _AddBillPageState extends State<AddBillPage>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  TAB 1 — MANUAL BILL
+//  TAB 1 — MUAL BILL
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 //  TAB 1 — MANUAL BILL
@@ -500,14 +500,36 @@ class _ScanBillTab extends StatefulWidget {
 class _ScanBillTabState extends State<_ScanBillTab> {
   bool _scanning = false;
   bool _scanned  = false;
+  bool _isSubmitting = false;
   
   final _titleCtrl  = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _picker     = ImagePicker();
 
+  String?  _selectedGroupId;
+  String   _category = 'food';
+  DateTime _billDate = DateTime.now();
+  List<Map<String, String>> _groups = [];
+  Map<String, dynamic>? _lastScanResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGroups();
+  }
+
+  Future<void> _loadGroups() async {
+    try {
+      final List<Map<String, String>> groups = await getGroups(_ManualBillTabState.tempuserid);
+      if (mounted) setState(() => _groups = groups);
+    } catch (e) {
+      debugPrint("DEBUG: _loadGroups ScanTab error: $e");
+    }
+  }
+
   Future<void> _startScan() async {
     // FOR TESTING: Use asset image instead of camera
-    debugPrint("DEBUG: Using tst asset image: lib/assets/testImage/img.png");
+    debugPrint("DEBUG: Using tst sset image: lib/assets/testImage/img.png");
     setState(() { _scanning = true; _scanned = false; });
 
     try {
@@ -527,9 +549,16 @@ class _ScanBillTabState extends State<_ScanBillTab> {
         setState(() {
           _scanning = false;
           _scanned  = true;
-          // 4. Fill form with OCR data
-          _titleCtrl.text  = result['title']?.toString() ?? '';
-          _amountCtrl.text = result['total_amount']?.toString() ?? '';
+          _lastScanResult = result;
+          // MAP JSON: establishment -> title, total -> amount
+          _titleCtrl.text  = result['establishment']?.toString() ?? '';
+          _amountCtrl.text = result['total']?.toString() ?? '';
+          
+          // Parse Date if available
+          if (result['date'] != null) {
+            final parsedDate = DateTime.tryParse(result['date'].toString());
+            if (parsedDate != null) _billDate = parsedDate;
+          }
         });
       }
     } catch (e) {
@@ -538,6 +567,40 @@ class _ScanBillTabState extends State<_ScanBillTab> {
         setState(() { _scanning = false; });
         _showSnack("Scan failed: $e", isError: true);
       }
+    }
+  }
+
+  Future<void> _submitScannedBill() async {
+    if (_selectedGroupId == null) {
+      _showSnack('Please select a group', isError: true);
+      return;
+    }
+    
+    final String? effectiveGroupId = (_selectedGroupId == 'NEW_GROUP') ? null : _selectedGroupId;
+
+    final bill = ManualBill(
+      title: _titleCtrl.text.trim(),
+      sessionType: "scan",
+      totalAmount: double.tryParse(_amountCtrl.text) ?? 0,
+      groupId: effectiveGroupId,
+      category: _ManualBillTabState()._categoryFromKey(_category),
+      splitType: EqualSplit(), 
+      participants: const [],
+      billDate: _billDate,
+      description: "Scanned receipt",
+    );
+
+    setState(() => _isSubmitting = true);
+    try {
+      final result = await createBill(bill);
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => SessionSummaryPage(result: result)),
+      );
+    } catch (e) {
+      if (mounted) _showSnack(e.toString(), isError: true);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -577,7 +640,7 @@ class _ScanBillTabState extends State<_ScanBillTab> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 12, offset: const Offset(0, 4),
                   ),
                 ],
@@ -600,7 +663,21 @@ class _ScanBillTabState extends State<_ScanBillTab> {
 
           if (_scanned) ...[
             const SizedBox(height: 6),
-            _ScannedBillForm(titleCtrl: _titleCtrl, amountCtrl: _amountCtrl),
+            _ScannedBillForm(
+              titleCtrl: _titleCtrl, 
+              amountCtrl: _amountCtrl,
+              groups: _groups,
+              selectedId: _selectedGroupId,
+              onGroupChanged: (id) => setState(() => _selectedGroupId = id),
+              billDate: _billDate,
+              onDateChanged: (d) => setState(() => _billDate = d),
+              category: _category,
+              onCategoryChanged: (v) => setState(() => _category = v),
+              isSubmitting: _isSubmitting,
+              onSubmit: _submitScannedBill,
+              onRefreshGroups: _loadGroups,
+              scanResult: _lastScanResult,
+            ),
           ],
 
           const SizedBox(height: 28),
@@ -620,7 +697,7 @@ class _ScanPlaceholder extends StatelessWidget {
         Container(
           width: 60, height: 60,
           decoration: BoxDecoration(
-            color: kAccent.withOpacity(0.1),
+            color: kAccent.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(18),
           ),
           child: const Icon(Icons.document_scanner_rounded, color: kAccent, size: 30),
@@ -649,7 +726,7 @@ class _ScanAnimation extends StatelessWidget {
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kAccent)),
         const SizedBox(height: 6),
         Text('POST /api/v1/ocr/scan',
-            style: TextStyle(color: kTextSec.withOpacity(0.7), fontSize: 11,
+            style: TextStyle(color: kTextSec.withValues(alpha: 0.7), fontSize: 11,
                 fontFamily: 'monospace')),
       ],
     );
@@ -665,7 +742,7 @@ class _ScannedPreview extends StatelessWidget {
         Container(
           width: 48, height: 48,
           decoration: BoxDecoration(
-            color: kGreen.withOpacity(0.12),
+            color: kGreen.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
           ),
           child: const Icon(Icons.check_rounded, color: kGreen, size: 26),
@@ -684,34 +761,160 @@ class _ScannedPreview extends StatelessWidget {
 class _ScannedBillForm extends StatelessWidget {
   final TextEditingController titleCtrl;
   final TextEditingController amountCtrl;
+  final List<Map<String, String>> groups;
+  final String? selectedId;
+  final ValueChanged<String?> onGroupChanged;
+  final DateTime billDate;
+  final ValueChanged<DateTime> onDateChanged;
+  final String category;
+  final ValueChanged<String> onCategoryChanged;
+  final bool isSubmitting;
+  final VoidCallback onSubmit;
+  final VoidCallback onRefreshGroups;
+  final Map<String, dynamic>? scanResult;
   
-  const _ScannedBillForm({required this.titleCtrl, required this.amountCtrl, super.key});
+  const _ScannedBillForm({
+    required this.titleCtrl, 
+    required this.amountCtrl,
+    required this.groups,
+    required this.selectedId,
+    required this.onGroupChanged,
+    required this.billDate,
+    required this.onDateChanged,
+    required this.category,
+    required this.onCategoryChanged,
+    required this.isSubmitting,
+    required this.onSubmit,
+    required this.onRefreshGroups,
+    this.scanResult,
+    super.key
+  });
 
   @override
   Widget build(BuildContext context) {
+    final items = scanResult?['lineItems'] as List<dynamic>? ?? [];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _InfoBanner(
-          'OCR filled the form — review before submitting.',
+          'Receipt scanned! Review the summary and details below.',
           icon: Icons.auto_fix_high_rounded,
           color: kAccent,
         ),
-        const SizedBox(height: 14),
-        _FieldLabel('Bill title'),
+        const SizedBox(height: 20),
+
+        // ─── BILL SUMMARY CARD ───
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10, offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('BILL SUMMARY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: kTextSec, letterSpacing: 1.2)),
+                  Icon(Icons.verified_rounded, color: kGreen.withValues(alpha: 0.8), size: 18),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(titleCtrl.text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrim)),
+              const SizedBox(height: 4),
+              Text(
+                '${billDate.day} / ${billDate.month} / ${billDate.year}',
+                style: const TextStyle(fontSize: 13, color: kTextSec, fontWeight: FontWeight.w500),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Divider(height: 1, color: kBorder),
+              ),
+
+              if (items.isNotEmpty) ...[
+                ...items.take(4).map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(item['descClean']?.toString() ?? 'Item', style: const TextStyle(fontSize: 13, color: kTextPrim))),
+                      Text('LKR ${item['lineTotal']?.toString() ?? '0'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrim)),
+                    ],
+                  ),
+                )),
+                if (items.length > 4)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text('+ ${items.length - 4} more items...', style: const TextStyle(fontSize: 12, color: kTextSec, fontStyle: FontStyle.italic)),
+                  ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Divider(height: 1, color: kBorder),
+                ),
+              ],
+
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total Amount', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kTextPrim)),
+                  Text('LKR ${amountCtrl.text}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kAccent)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 30),
+
+        // ─── EDITABLE SECTION ───
+        const Text('Refine Details', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kTextPrim)),
+        const SizedBox(height: 16),
+        
+        _FieldLabel('Place Name'),
         _StyledField(controller: titleCtrl, hint: 'e.g. Cafe Lunch'),
-        const SizedBox(height: 12),
-        _FieldLabel('Total amount'),
-        _StyledField(controller: amountCtrl, hint: '0.00',
-            keyboardType: TextInputType.number),
-        const SizedBox(height: 18),
-        // API POINT: POST /api/v1/bills
+        const SizedBox(height: 14),
+
+        _FieldLabel('Total Amount'),
+        _AmountField(controller: amountCtrl),
+        const SizedBox(height: 14),
+
+        _FieldLabel('Group'),
+        _GroupDropdown(
+          groups: groups,
+          selectedId: selectedId,
+          onChanged: onGroupChanged,
+          onRefresh: onRefreshGroups,
+        ),
+        const SizedBox(height: 14),
+
+        _FieldLabel('Category'),
+        _CategoryGrid(
+          categories: _ManualBillTabState._categories,
+          selected: category,
+          onChanged: onCategoryChanged,
+        ),
+        const SizedBox(height: 14),
+
+        _FieldLabel('Bill date'),
+        _DatePickerRow(
+          date: billDate,
+          onChanged: onDateChanged,
+        ),
+        const SizedBox(height: 24),
+
         _PrimaryButton(
-          label: 'Confirm & Add Bill',
-          icon: Icons.check_circle_outline_rounded,
-          onTap: () {
-            // Implement OCR bill submission logic
-          },
+          label: isSubmitting ? 'Creating bill...' : 'Add Bill & Generate QR',
+          icon: Icons.qr_code_rounded,
+          onTap: isSubmitting ? null : onSubmit,
         ),
       ],
     );
@@ -784,7 +987,7 @@ class _ScheduleBillTabState extends State<_ScheduleBillTab> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: sel ? kAccent : kBorder),
                     boxShadow: sel ? [] : [
-                      BoxShadow(color: Colors.black.withOpacity(0.04),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 6, offset: const Offset(0, 2)),
                     ],
                   ),
@@ -1039,9 +1242,9 @@ class _SelectionChip extends StatelessWidget {
           border: Border.all(color: borderColor),
           boxShadow: [
             if (isSelected)
-              BoxShadow(color: kAccent.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))
+              BoxShadow(color: kAccent.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 2))
             else
-              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 1)),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 1)),
           ],
         ),
         child: Row(
@@ -1183,11 +1386,11 @@ class _CategoryGrid extends StatelessWidget {
           onTap: () => onChanged(cat.$1),
           child: Container(
             decoration: BoxDecoration(
-              color: sel ? kAccent.withOpacity(0.08) : Colors.white,
+              color: sel ? kAccent.withValues(alpha: 0.08) : Colors.white,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: sel ? kAccent : kBorder),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.04),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 6, offset: const Offset(0, 2)),
               ],
             ),
@@ -1238,7 +1441,7 @@ class _SplitTypeRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: sel ? kAccent : kBorder),
                 boxShadow: sel ? [] : [
-                  BoxShadow(color: Colors.black.withOpacity(0.04),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 6, offset: const Offset(0, 2)),
                 ],
               ),
@@ -1296,7 +1499,7 @@ class _DatePickerRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: kBorder),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 6, offset: const Offset(0, 2)),
           ],
         ),
@@ -1338,8 +1541,8 @@ class _PrimaryButton extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
-              BoxShadow(
-                color: kAccent.withOpacity(0.3),
+            BoxShadow(
+                color: kAccent.withValues(alpha: 0.3),
                 blurRadius: 12, offset: const Offset(0, 4),
               ),
             ],
@@ -1372,9 +1575,9 @@ class _QrResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kGreen.withOpacity(0.3)),
+        border: Border.all(color: kGreen.withValues(alpha: 0.3)),
         boxShadow: [
-          BoxShadow(color: kGreen.withOpacity(0.08),
+          BoxShadow(color: kGreen.withValues(alpha: 0.08),
               blurRadius: 12, offset: const Offset(0, 4)),
         ],
       ),
@@ -1385,7 +1588,7 @@ class _QrResultCard extends StatelessWidget {
               Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(
-                  color: kGreen.withOpacity(0.12),
+                  color: kGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.check_rounded, color: kGreen, size: 20),
@@ -1407,9 +1610,9 @@ class _QrResultCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
-                    color: kAccent.withOpacity(0.08),
+                    color: kAccent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: kAccent.withOpacity(0.2)),
+                    border: Border.all(color: kAccent.withValues(alpha: 0.2)),
                   ),
                   child: const Text('Share',
                       style: TextStyle(color: kAccent, fontSize: 13,
@@ -1438,7 +1641,7 @@ class _QrResultCard extends StatelessWidget {
           const SizedBox(height: 10),
           // API POINT: GET /api/v1/bills/{id}/qr
           Text('GET /api/v1/bills/{id}/qr',
-              style: TextStyle(color: kTextSec.withOpacity(0.6),
+              style: TextStyle(color: kTextSec.withValues(alpha: 0.6),
                   fontSize: 10, fontFamily: 'monospace')),
         ],
       ),
@@ -1457,9 +1660,9 @@ class _InfoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -1570,7 +1773,7 @@ class _PastBillCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10, offset: const Offset(0, 3)),
         ],
       ),
@@ -1579,7 +1782,7 @@ class _PastBillCard extends StatelessWidget {
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: cat.$2.withOpacity(0.12),
+              color: cat.$2.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(13),
             ),
             alignment: Alignment.center,
@@ -1612,8 +1815,8 @@ class _PastBillCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: isSettled
-                      ? const Color(0xFF9E9E9E).withOpacity(0.1)
-                      : kGreen.withOpacity(0.1),
+                      ? const Color(0xFF9E9E9E).withValues(alpha: 0.1)
+                      : kGreen.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(bill.status,
