@@ -9,7 +9,8 @@ Future<Map<String, dynamic>> scanReceipt(File imageFile) async {
   debugPrint("DEBUG: scanReceipt called with file: ${imageFile.path}");
   
   // Assuming 3002 based on the group controller port
-  final url = Uri.parse('http://10.0.2.2:3000/api/session/orc');
+  final url = Uri.parse('http://10.0.2.2:3000'
+      '/api/session/orc');
   
   try {
     var request = http.MultipartRequest('POST', url);
