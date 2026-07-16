@@ -507,7 +507,7 @@ class _ScanBillTabState extends State<_ScanBillTab> {
 
   Future<void> _startScan() async {
     // FOR TESTING: Use asset image instead of camera
-    debugPrint("DEBUG: Using test asset image: lib/assets/testImage/img.png");
+    debugPrint("DEBUG: Using tst asset image: lib/assets/testImage/img.png");
     setState(() { _scanning = true; _scanned = false; });
 
     try {
