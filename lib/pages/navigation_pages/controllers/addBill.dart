@@ -11,7 +11,7 @@ Future<SessionCreateResult> createBill(Bill bill) async {
   late final http.Response response;
   try {
     response = await http.post(
-      Uri.parse('http://10.0.2.2:3000/api/session/create'),
+      Uri.parse('http://172.20.10.2:3000/api/session/create'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(bill.toJson()),
     );

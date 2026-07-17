@@ -7,7 +7,7 @@ Future<List<Map<String, String>>> getGroups(String userid) async {
   late final http.Response response;
   try {
     response = await http.post(
-      Uri.parse('http://10.0.2.2:3002/group/getGroup'),
+      Uri.parse('http://172.20.10.2:3002/group/getGroup'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'userId': userid}),
     );

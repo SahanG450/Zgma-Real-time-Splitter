@@ -14,7 +14,7 @@ Future<void> registerUser(BuildContext context) async {
   try {
     final response = await http.post(
       Uri.parse(
-        'http://10.0.2.2:3001/api/v1/auth/register',
+        'http://172.20.10.2:3000/api/v1/auth/register',
       ),
       headers: {
         'Content-Type': 'application/json',
