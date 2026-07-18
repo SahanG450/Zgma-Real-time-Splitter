@@ -511,6 +511,7 @@ class _ScanBillTabState extends State<_ScanBillTab> {
   DateTime _billDate = DateTime.now();
   List<Map<String, String>> _groups = [];
   Map<String, dynamic>? _lastScanResult;
+  File? _imageFile;
 
   @override
   void initState() {
@@ -528,22 +529,22 @@ class _ScanBillTabState extends State<_ScanBillTab> {
   }
 
   Future<void> _startScan() async {
-    // FOR TESTING: Use asset image instead of camera
-    debugPrint("DEBUG: Using tst sset image: lib/assets/testImage/img.png");
-    setState(() { _scanning = true; _scanned = false; });
-
     try {
-      // 1. Load asset bytes
-      final ByteData data = await rootBundle.load('lib/assets/testImage/img.png');
-      final List<int> bytes = data.buffer.asUint8List();
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
 
-      // 2. Save to temp file (multipart needs a file path)
-      final tempDir = await getTemporaryDirectory();
-      final File tempFile = File('${tempDir.path}/test_receipt.png');
-      await tempFile.writeAsBytes(bytes);
+      if (photo == null) return;
 
-      // 3. Send to API (multipart)
-      final result = await scanReceipt(tempFile);
+      setState(() {
+        _scanning = true;
+        _scanned = false;
+        _imageFile = File(photo.path);
+      });
+
+      // Send to API (multipart)
+      final result = await scanReceipt(_imageFile!);
       
       if (mounted) {
         setState(() {
@@ -562,7 +563,7 @@ class _ScanBillTabState extends State<_ScanBillTab> {
         });
       }
     } catch (e) {
-      debugPrint("DEBUG: Test Scan Error: $e");
+      debugPrint("DEBUG: Scan Error: $e");
       if (mounted) {
         setState(() { _scanning = false; });
         _showSnack("Scan failed: $e", isError: true);
@@ -648,7 +649,7 @@ class _ScanBillTabState extends State<_ScanBillTab> {
               child: _scanning
                   ? _ScanAnimation()
                   : _scanned
-                  ? _ScannedPreview()
+                  ? _ScannedPreview(imageFile: _imageFile)
                   : _ScanPlaceholder(),
             ),
           ),
@@ -734,26 +735,44 @@ class _ScanAnimation extends StatelessWidget {
 }
 
 class _ScannedPreview extends StatelessWidget {
+  final File? imageFile;
+  const _ScannedPreview({this.imageFile});
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 48, height: 48,
-          decoration: BoxDecoration(
-            color: kGreen.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (imageFile != null)
+            Image.file(imageFile!, fit: BoxFit.cover)
+          else
+            const Center(child: Icon(Icons.receipt, size: 50, color: kBorder)),
+          Container(
+            color: Colors.black.withValues(alpha: 0.4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    color: kGreen.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 26),
+                ),
+                const SizedBox(height: 12),
+                const Text('Receipt scanned',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                const SizedBox(height: 4),
+                const Text('Review details below',
+                    style: TextStyle(fontSize: 12, color: Colors.white70)),
+              ],
+            ),
           ),
-          child: const Icon(Icons.check_rounded, color: kGreen, size: 26),
-        ),
-        const SizedBox(height: 12),
-        const Text('Receipt scanned',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kGreen)),
-        const SizedBox(height: 4),
-        const Text('Review and confirm details below',
-            style: TextStyle(fontSize: 12, color: kTextSec)),
-      ],
+        ],
+      ),
     );
   }
 }
