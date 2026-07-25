@@ -8,6 +8,9 @@ TextEditingController();
 final TextEditingController emailController =
 TextEditingController();
 
+final TextEditingController passwordController =
+TextEditingController();
+
 String phoneNumber = "";
 
 Future<void> registerUser(BuildContext context) async {
@@ -23,7 +26,7 @@ Future<void> registerUser(BuildContext context) async {
         'name': usernameController.text,
         'email': emailController.text,
         'phone': phoneNumber,
-        'password':"sahaN123#",
+        'password': passwordController.text,
       }),
     );
     print("Status Code ===============>: ${response.statusCode}");
