@@ -114,6 +114,24 @@ class RegisterPage extends StatelessWidget {
 
             const SizedBox(height: 14),
 
+            TextField(
+              controller: passwordController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                labelStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white10,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
             SizedBox(
               width: double.infinity,
               height: 52,

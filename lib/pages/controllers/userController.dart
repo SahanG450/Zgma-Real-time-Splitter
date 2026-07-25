@@ -8,13 +8,16 @@ TextEditingController();
 final TextEditingController emailController =
 TextEditingController();
 
+final TextEditingController passwordController =
+TextEditingController();
+
 String phoneNumber = "";
 
 Future<void> registerUser(BuildContext context) async {
   try {
     final response = await http.post(
       Uri.parse(
-        'http://192.168.16.101:3000/api/v1/auth/register',
+        'http://localhost:3001/auth/register',
       ),
       headers: {
         'Content-Type': 'application/json',
@@ -23,7 +26,7 @@ Future<void> registerUser(BuildContext context) async {
         'name': usernameController.text,
         'email': emailController.text,
         'phone': phoneNumber,
-        'password':"sahaN123#",
+        'password': passwordController.text,
       }),
     );
     print("Status Code ===============>: ${response.statusCode}");

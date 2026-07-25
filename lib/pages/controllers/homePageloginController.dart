@@ -9,7 +9,7 @@ Future<void> loginUser(BuildContext context) async {
   try {
     final response = await http.post(
       Uri.parse(
-        'http://192.168.16.101:3001/auth/login',
+        'http://localhost:3001/auth/login',
       ),
       headers: {
         'Content-Type': 'application/json',
